@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Body, UploadFile, File
+import mysql.connector
 import whisper
 import tempfile
 import os
@@ -6,11 +7,30 @@ import base64
 from fastapi.middleware.cors import CORSMiddleware
 import ollama
 
+
+# MySQL connection config
+db_config = {
+    'host': 'localhost',
+    'user': 'root',
+    'password': '2456',
+    'database': 'guru_multibot',
+    'port': 3306
+}
+
+def store_interaction(input_type, user_input, bot_response):
+    conn = mysql.connector.connect(**db_config)
+    cursor = conn.cursor()
+    query = "INSERT INTO chat_history (input_type, user_input, bot_response) VALUES (%s, %s, %s)"
+    cursor.execute(query, (input_type, user_input, bot_response))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:3000", "http://localhost:3001"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -20,7 +40,9 @@ app.add_middleware(
 async def chat_endpoint(data: dict = Body(...)):
     text = data.get("message")
     response = ollama.chat(model='mistral', messages=[{'role': 'user', 'content': text}])
-    return {"response": response['message']['content']}
+    bot_response = response['message']['content']
+    store_interaction('text', text, bot_response)
+    return {"response": bot_response}
 
 @app.post("/voice-chat")
 async def voice_chat(audio: UploadFile = File(...)):
@@ -42,7 +64,7 @@ async def voice_chat(audio: UploadFile = File(...)):
         # Query Ollama with transcribed text
         ollama_response = ollama.chat(model='mistral', messages=[{'role': 'user', 'content': transcribed_text}])
         response_text = ollama_response['message']['content']
-
+        store_interaction('voice', transcribed_text, response_text)
         return {"response": response_text}
     finally:
         # Clean up temp file
@@ -67,7 +89,20 @@ async def image_chat(image: UploadFile = File(...), text: str = Body(..., embed=
             }
         ]
     )
-    return {"response": response['message']['content']}
+    bot_response = response['message']['content']
+    store_interaction('image', text, bot_response)
+    return {"response": bot_response}
+
+# Endpoint to fetch all chat history
+@app.get("/chat-history")
+def get_chat_history():
+    conn = mysql.connector.connect(**db_config)
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM chat_history ORDER BY timestamp DESC")
+    history = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return {"history": history}
 
 if __name__ == "__main__":
     import uvicorn

@@ -14,3 +14,26 @@ build/
 
 # Environment
 .env
+
+# Large files and media
+*.wav
+*.mp3
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.zip
+*.tar
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.7z
+*.mp4
+*.mkv
+*.avi
+*.mov
+*.webm
+*.pdf
+*.docx
+*.xlsx
+*.pptx
