@@ -71,6 +71,26 @@ async def voice_chat(audio: UploadFile = File(...)):
         if os.path.exists(temp_path):
             os.unlink(temp_path)
 
+@app.post("/transcribe")
+async def transcribe_audio(audio: UploadFile = File(...)):
+    # Create temporary file for audio
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_file:
+        content = await audio.read()
+        temp_file.write(content)
+        temp_path = temp_file.name
+
+    try:
+        # Load Whisper model (use 'base' for speed)
+        model = whisper.load_model("base")
+        result = model.transcribe(temp_path)
+        transcribed_text = result["text"].strip()
+        
+        return {"transcription": transcribed_text}
+    finally:
+        # Clean up temp file
+        if os.path.exists(temp_path):
+            os.unlink(temp_path)
+
 @app.post("/image-chat")
 async def image_chat(image: UploadFile = File(...), text: str = Body(..., embed=True)):
     if not text:
@@ -103,6 +123,46 @@ def get_chat_history():
     cursor.close()
     conn.close()
     return {"history": history}
+
+# Endpoint to delete a specific chat history entry
+@app.delete("/chat-history/{chat_id}")
+def delete_chat_history(chat_id: int):
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+        
+        # Check if the record exists
+        cursor.execute("SELECT id FROM chat_history WHERE id = %s", (chat_id,))
+        if not cursor.fetchone():
+            cursor.close()
+            conn.close()
+            return {"success": False, "message": "Chat history not found"}
+        
+        # Delete the record
+        cursor.execute("DELETE FROM chat_history WHERE id = %s", (chat_id,))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        return {"success": True, "message": "Chat history deleted successfully"}
+    except Exception as e:
+        return {"success": False, "message": f"Error deleting chat history: {str(e)}"}
+
+# Endpoint to delete all chat history
+@app.delete("/chat-history")
+def delete_all_chat_history():
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM chat_history")
+        conn.commit()
+        deleted_count = cursor.rowcount
+        cursor.close()
+        conn.close()
+        
+        return {"success": True, "message": f"Deleted {deleted_count} chat history entries"}
+    except Exception as e:
+        return {"success": False, "message": f"Error deleting all chat history: {str(e)}"}
 
 if __name__ == "__main__":
     import uvicorn
