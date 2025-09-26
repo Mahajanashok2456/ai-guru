@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Body, UploadFile, File, HTTPException
-import mysql.connector
+from pymongo import MongoClient
 import tempfile
 import os
 import base64
@@ -8,6 +8,8 @@ import google.generativeai as genai
 from dotenv import load_dotenv
 from PIL import Image
 import io
+from datetime import datetime
+import uuid
 
 # Load environment variables
 load_dotenv()
@@ -19,36 +21,29 @@ genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
 text_model = genai.GenerativeModel('gemini-1.5-flash-8b')
 vision_model = genai.GenerativeModel('gemini-1.5-flash-8b')  # Using same model for both
 
-# MySQL connection config
-db_config = {
-    'host': os.getenv('DB_HOST', 'localhost'),
-    'user': os.getenv('DB_USER', 'root'),
-    'password': os.getenv('DB_PASSWORD', '2456'),
-    'database': os.getenv('DB_NAME', 'guru_multibot'),
-    'port': 3306
-}
+# MongoDB connection config
+MONGODB_URI = os.getenv('MONGODB_URI', 'mongodb+srv://Mahajan:2456@cluster0.api5hwq.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0')
+client = MongoClient(MONGODB_URI)
+db = client.guru_multibot
+chat_collection = db.chat_history
 
 def store_interaction(input_type, user_input, bot_response, session_id=None):
-    conn = mysql.connector.connect(**db_config)
-    cursor = conn.cursor()
-    
-    # Create session_id column if it doesn't exist
-    try:
-        cursor.execute("ALTER TABLE chat_history ADD COLUMN session_id VARCHAR(50)")
-        conn.commit()
-    except mysql.connector.Error:
-        pass  # Column already exists
-    
     # Generate session_id if not provided
     if not session_id:
-        import uuid
         session_id = str(uuid.uuid4())[:8]  # Short session ID
     
-    query = "INSERT INTO chat_history (input_type, user_input, bot_response, session_id) VALUES (%s, %s, %s, %s)"
-    cursor.execute(query, (input_type, user_input, bot_response, session_id))
-    conn.commit()
-    cursor.close()
-    conn.close()
+    # Create document for MongoDB
+    document = {
+        "_id": str(uuid.uuid4()),
+        "input_type": input_type,
+        "user_input": user_input,
+        "bot_response": bot_response,
+        "session_id": session_id,
+        "timestamp": datetime.utcnow()
+    }
+    
+    # Insert into MongoDB
+    chat_collection.insert_one(document)
     return session_id
 
 app = FastAPI()
@@ -142,70 +137,71 @@ async def image_chat(image: UploadFile = File(...), text: str = Body(..., embed=
 # Endpoint to fetch all chat history grouped by sessions
 @app.get("/chat-history")
 def get_chat_history():
-    conn = mysql.connector.connect(**db_config)
-    cursor = conn.cursor(dictionary=True)
-    
-    # Get sessions with their latest message timestamp for ordering
-    cursor.execute("""
-        SELECT session_id, 
-               MAX(timestamp) as latest_timestamp,
-               COUNT(*) as message_count
-        FROM chat_history 
-        WHERE session_id IS NOT NULL
-        GROUP BY session_id 
-        ORDER BY latest_timestamp DESC 
-        LIMIT 20
-    """)
-    sessions = cursor.fetchall()
-    
-    grouped_history = []
-    for session in sessions:
-        session_id = session['session_id']
+    try:
+        # Get sessions with their latest message timestamp for ordering using MongoDB aggregation
+        pipeline = [
+            {"$match": {"session_id": {"$exists": True, "$ne": None}}},
+            {"$group": {
+                "_id": "$session_id",
+                "latest_timestamp": {"$max": "$timestamp"},
+                "message_count": {"$sum": 1},
+                "first_message": {"$first": "$user_input"}
+            }},
+            {"$sort": {"latest_timestamp": -1}},
+            {"$limit": 20}
+        ]
         
-        # Get all messages for this session
-        cursor.execute("""
-            SELECT * FROM chat_history 
-            WHERE session_id = %s 
-            ORDER BY timestamp ASC
-        """, (session_id,))
-        messages = cursor.fetchall()
+        sessions = list(chat_collection.aggregate(pipeline))
         
-        # Create session object with first message as title
-        session_title = messages[0]['user_input'][:50] + "..." if len(messages[0]['user_input']) > 50 else messages[0]['user_input']
+        grouped_history = []
+        for session in sessions:
+            session_id = session['_id']
+            
+            # Get all messages for this session
+            messages = list(chat_collection.find(
+                {"session_id": session_id}
+            ).sort("timestamp", 1))
+            
+            # Convert ObjectId to string and format datetime
+            for msg in messages:
+                if '_id' in msg:
+                    del msg['_id']
+                if 'timestamp' in msg and msg['timestamp']:
+                    msg['timestamp'] = msg['timestamp'].isoformat()
+            
+            # Create session object with first message as title
+            first_message = session.get('first_message', '')
+            session_title = first_message[:50] + "..." if len(first_message) > 50 else first_message
+            
+            grouped_history.append({
+                'session_id': session_id,
+                'session_title': session_title,
+                'message_count': session['message_count'],
+                'latest_timestamp': session['latest_timestamp'].isoformat() if session['latest_timestamp'] else None,
+                'messages': messages
+            })
         
-        grouped_history.append({
-            'session_id': session_id,
-            'session_title': session_title,
-            'message_count': session['message_count'],
-            'latest_timestamp': session['latest_timestamp'],
-            'messages': messages
-        })
-    
-    cursor.close()
-    conn.close()
+        return {"sessions": grouped_history}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching chat history: {str(e)}")
     return {"sessions": grouped_history}
 
 # Endpoint to delete a specific chat history entry
 @app.delete("/chat-history/{chat_id}")
-def delete_chat_history(chat_id: int):
+def delete_chat_history(chat_id: str):
     try:
-        conn = mysql.connector.connect(**db_config)
-        cursor = conn.cursor()
-        
         # Check if the record exists
-        cursor.execute("SELECT id FROM chat_history WHERE id = %s", (chat_id,))
-        if not cursor.fetchone():
-            cursor.close()
-            conn.close()
+        existing_record = chat_collection.find_one({"_id": chat_id})
+        if not existing_record:
             return {"success": False, "message": "Chat history not found"}
         
         # Delete the record
-        cursor.execute("DELETE FROM chat_history WHERE id = %s", (chat_id,))
-        conn.commit()
-        cursor.close()
-        conn.close()
+        result = chat_collection.delete_one({"_id": chat_id})
         
-        return {"success": True, "message": "Chat history deleted successfully"}
+        if result.deleted_count > 0:
+            return {"success": True, "message": "Chat history deleted successfully"}
+        else:
+            return {"success": False, "message": "Failed to delete chat history"}
     except Exception as e:
         return {"success": False, "message": f"Error deleting chat history: {str(e)}"}
 
@@ -213,13 +209,8 @@ def delete_chat_history(chat_id: int):
 @app.delete("/chat-history")
 def delete_all_chat_history():
     try:
-        conn = mysql.connector.connect(**db_config)
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM chat_history")
-        conn.commit()
-        deleted_count = cursor.rowcount
-        cursor.close()
-        conn.close()
+        result = chat_collection.delete_many({})
+        deleted_count = result.deleted_count
         
         return {"success": True, "message": f"Deleted {deleted_count} chat history entries"}
     except Exception as e:
@@ -229,24 +220,15 @@ def delete_all_chat_history():
 @app.delete("/session/{session_id}")
 def delete_session(session_id: str):
     try:
-        conn = mysql.connector.connect(**db_config)
-        cursor = conn.cursor()
-        
         # Check if the session exists
-        cursor.execute("SELECT COUNT(*) FROM chat_history WHERE session_id = %s", (session_id,))
-        count = cursor.fetchone()[0]
+        count = chat_collection.count_documents({"session_id": session_id})
         
         if count == 0:
-            cursor.close()
-            conn.close()
             return {"success": False, "message": "Session not found"}
         
         # Delete all messages in the session
-        cursor.execute("DELETE FROM chat_history WHERE session_id = %s", (session_id,))
-        conn.commit()
-        deleted_count = cursor.rowcount
-        cursor.close()
-        conn.close()
+        result = chat_collection.delete_many({"session_id": session_id})
+        deleted_count = result.deleted_count
         
         return {"success": True, "message": f"Session deleted successfully. {deleted_count} messages removed."}
     except Exception as e:
