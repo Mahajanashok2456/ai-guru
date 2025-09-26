@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Body, UploadFile, File, HTTPException
+from fastapi import FastAPI, Body, UploadFile, File, HTTPException, Depends, Request
 from pymongo import MongoClient
 import tempfile
 import os
@@ -10,12 +10,27 @@ from PIL import Image
 import io
 from datetime import datetime
 import uuid
+import re
+from pydantic import BaseModel, field_validator
+from typing import Optional
+from collections import defaultdict
+from datetime import timedelta
 
 # Load environment variables
 load_dotenv()
 
+# Security: Validate required environment variables
+REQUIRED_ENV_VARS = ['GEMINI_API_KEY', 'MONGODB_URI']
+missing_vars = [var for var in REQUIRED_ENV_VARS if not os.getenv(var)]
+if missing_vars:
+    raise RuntimeError(f"Missing required environment variables: {', '.join(missing_vars)}")
+
 # Configure Gemini
-genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
+gemini_api_key = os.getenv('GEMINI_API_KEY')
+if gemini_api_key == "your_gemini_api_key_here" or len(gemini_api_key) < 30:
+    raise RuntimeError("Invalid Gemini API key detected. Please set a valid API key.")
+
+genai.configure(api_key=gemini_api_key)
 
 # Initialize Gemini models with free tier compatible names
 text_model = genai.GenerativeModel('gemini-1.5-flash-8b')
@@ -26,6 +41,70 @@ MONGODB_URI = os.getenv('MONGODB_URI', 'mongodb+srv://Mahajan:2456@cluster0.api5
 client = MongoClient(MONGODB_URI)
 db = client.guru_multibot
 chat_collection = db.chat_history
+
+# Security: Rate limiting
+class RateLimiter:
+    def __init__(self, max_requests: int = 30, time_window: int = 60):
+        self.max_requests = max_requests
+        self.time_window = time_window
+        self.requests = defaultdict(list)
+    
+    async def check_rate_limit(self, client_ip: str):
+        now = datetime.now()
+        
+        # Clean old requests
+        self.requests[client_ip] = [
+            req_time for req_time in self.requests[client_ip]
+            if now - req_time < timedelta(seconds=self.time_window)
+        ]
+        
+        # Check rate limit
+        if len(self.requests[client_ip]) >= self.max_requests:
+            raise HTTPException(
+                status_code=429, 
+                detail="Rate limit exceeded. Please try again later."
+            )
+        
+        # Add current request
+        self.requests[client_ip].append(now)
+
+# Global rate limiter instance
+rate_limiter = RateLimiter(max_requests=30, time_window=60)
+
+# Security: Input validation models
+class ChatRequest(BaseModel):
+    message: str
+    session_id: Optional[str] = None
+    
+    @field_validator('message')
+    @classmethod
+    def validate_message(cls, v):
+        if not v or not v.strip():
+            raise ValueError('Message cannot be empty')
+        if len(v) > 5000:  # Limit message length
+            raise ValueError('Message too long (max 5000 characters)')
+        # Remove potentially dangerous characters
+        v = re.sub(r'[<>"\';]', '', v.strip())
+        return v
+    
+    @field_validator('session_id')
+    @classmethod
+    def validate_session_id(cls, v):
+        if v and not re.match(r'^[a-zA-Z0-9-]+$', v):
+            raise ValueError('Invalid session ID format')
+        return v
+
+class ImageRequest(BaseModel):
+    description: str
+    session_id: Optional[str] = None
+    
+    @field_validator('description')
+    @classmethod
+    def validate_description(cls, v):
+        if len(v) > 1000:
+            raise ValueError('Description too long (max 1000 characters)')
+        v = re.sub(r'[<>"\';]', '', v.strip())
+        return v
 
 def store_interaction(input_type, user_input, bot_response, session_id=None):
     # Generate session_id if not provided
@@ -46,27 +125,53 @@ def store_interaction(input_type, user_input, bot_response, session_id=None):
     chat_collection.insert_one(document)
     return session_id
 
-app = FastAPI()
+app = FastAPI(
+    title="AI Guru Multibot API",
+    description="Secure AI Chat API with MongoDB integration",
+    version="2.0.0",
+    docs_url="/docs" if os.getenv('ENVIRONMENT') != 'production' else None,  # Hide docs in production
+    redoc_url=None  # Disable redoc
+)
+
+# Security Headers Middleware
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Content-Security-Policy"] = "default-src 'self'"
+    return response
+
+# Secure CORS Configuration
+allowed_origins = [
+    "http://localhost:3000",
+    "http://localhost:3001",
+    # Add your production domains here
+    # "https://your-app.vercel.app"
+]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],  # Only needed methods
+    allow_headers=["Content-Type", "Authorization"],     # Only needed headers
 )
 
 @app.post("/chat")
-async def chat_endpoint(data: dict = Body(...)):
+async def chat_endpoint(request: ChatRequest, http_request: Request):
     try:
-        text = data.get("message")
-        session_id = data.get("session_id")  # Get session_id from frontend
+        # Security: Rate limiting
+        await rate_limiter.check_rate_limit(http_request.client.host)
+        text = request.message
+        session_id = request.session_id
         
-        print(f"Received message: {text}")
-        print(f"API Key loaded: {'Yes' if os.getenv('GEMINI_API_KEY') else 'No'}")
-        
-        if not text or not text.strip():
-            raise HTTPException(status_code=400, detail="Message cannot be empty")
+        # Security: Don't log sensitive data in production
+        if os.getenv('ENVIRONMENT') != 'production':
+            print(f"Received message length: {len(text)}")
+            print(f"API Key loaded: {'Yes' if os.getenv('GEMINI_API_KEY') else 'No'}")
         
         # Generate response using Gemini
         print("Calling Gemini API...")
@@ -113,10 +218,28 @@ async def test_gemini():
 # Use text chat instead
 
 @app.post("/image-chat")
-async def image_chat(image: UploadFile = File(...), text: str = Body(..., embed=True), session_id: str = Body(None, embed=True)):
+async def image_chat(image: UploadFile = File(...), text: str = Body(..., embed=True), session_id: str = Body(None, embed=True), http_request: Request = None):
     try:
+        # Security: Rate limiting
+        if http_request:
+            await rate_limiter.check_rate_limit(http_request.client.host)
+        
+        # Security: File validation
+        MAX_FILE_SIZE = int(os.getenv('MAX_FILE_SIZE', 10485760))  # 10MB default
+        allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+        
+        if image.size > MAX_FILE_SIZE:
+            raise HTTPException(status_code=413, detail="File too large. Max size: 10MB")
+        
+        if image.content_type not in allowed_types:
+            raise HTTPException(status_code=415, detail="Unsupported file type. Use JPEG, PNG, GIF, or WebP")
+        
         if not text:
             text = "Describe this image."
+        
+        # Validate text input
+        if len(text) > 1000:
+            raise HTTPException(status_code=400, detail="Description too long (max 1000 characters)")
         
         # Read image data
         image_bytes = await image.read()
