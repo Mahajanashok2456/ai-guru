@@ -17,14 +17,28 @@ db_config = {
     'port': 3306
 }
 
-def store_interaction(input_type, user_input, bot_response):
+def store_interaction(input_type, user_input, bot_response, session_id=None):
     conn = mysql.connector.connect(**db_config)
     cursor = conn.cursor()
-    query = "INSERT INTO chat_history (input_type, user_input, bot_response) VALUES (%s, %s, %s)"
-    cursor.execute(query, (input_type, user_input, bot_response))
+    
+    # Create session_id column if it doesn't exist
+    try:
+        cursor.execute("ALTER TABLE chat_history ADD COLUMN session_id VARCHAR(50)")
+        conn.commit()
+    except mysql.connector.Error:
+        pass  # Column already exists
+    
+    # Generate session_id if not provided
+    if not session_id:
+        import uuid
+        session_id = str(uuid.uuid4())[:8]  # Short session ID
+    
+    query = "INSERT INTO chat_history (input_type, user_input, bot_response, session_id) VALUES (%s, %s, %s, %s)"
+    cursor.execute(query, (input_type, user_input, bot_response, session_id))
     conn.commit()
     cursor.close()
     conn.close()
+    return session_id
 
 app = FastAPI()
 
@@ -39,13 +53,14 @@ app.add_middleware(
 @app.post("/chat")
 async def chat_endpoint(data: dict = Body(...)):
     text = data.get("message")
+    session_id = data.get("session_id")  # Get session_id from frontend
     response = ollama.chat(model='mistral', messages=[{'role': 'user', 'content': text}])
     bot_response = response['message']['content']
-    store_interaction('text', text, bot_response)
-    return {"response": bot_response}
+    session_id = store_interaction('text', text, bot_response, session_id)
+    return {"response": bot_response, "session_id": session_id}
 
 @app.post("/voice-chat")
-async def voice_chat(audio: UploadFile = File(...)):
+async def voice_chat(audio: UploadFile = File(...), session_id: str = None):
     # Create temporary file for audio
     with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_file:
         content = await audio.read()
@@ -64,8 +79,8 @@ async def voice_chat(audio: UploadFile = File(...)):
         # Query Ollama with transcribed text
         ollama_response = ollama.chat(model='mistral', messages=[{'role': 'user', 'content': transcribed_text}])
         response_text = ollama_response['message']['content']
-        store_interaction('voice', transcribed_text, response_text)
-        return {"response": response_text}
+        session_id = store_interaction('voice', transcribed_text, response_text, session_id)
+        return {"response": response_text, "session_id": session_id}
     finally:
         # Clean up temp file
         if os.path.exists(temp_path):
@@ -113,16 +128,51 @@ async def image_chat(image: UploadFile = File(...), text: str = Body(..., embed=
     store_interaction('image', text, bot_response)
     return {"response": bot_response}
 
-# Endpoint to fetch all chat history
+# Endpoint to fetch all chat history grouped by sessions
 @app.get("/chat-history")
 def get_chat_history():
     conn = mysql.connector.connect(**db_config)
     cursor = conn.cursor(dictionary=True)
-    cursor.execute("SELECT * FROM chat_history ORDER BY timestamp DESC")
-    history = cursor.fetchall()
+    
+    # Get sessions with their latest message timestamp for ordering
+    cursor.execute("""
+        SELECT session_id, 
+               MAX(timestamp) as latest_timestamp,
+               COUNT(*) as message_count
+        FROM chat_history 
+        WHERE session_id IS NOT NULL
+        GROUP BY session_id 
+        ORDER BY latest_timestamp DESC 
+        LIMIT 20
+    """)
+    sessions = cursor.fetchall()
+    
+    grouped_history = []
+    for session in sessions:
+        session_id = session['session_id']
+        
+        # Get all messages for this session
+        cursor.execute("""
+            SELECT * FROM chat_history 
+            WHERE session_id = %s 
+            ORDER BY timestamp ASC
+        """, (session_id,))
+        messages = cursor.fetchall()
+        
+        # Create session object with first message as title
+        session_title = messages[0]['user_input'][:50] + "..." if len(messages[0]['user_input']) > 50 else messages[0]['user_input']
+        
+        grouped_history.append({
+            'session_id': session_id,
+            'session_title': session_title,
+            'message_count': session['message_count'],
+            'latest_timestamp': session['latest_timestamp'],
+            'messages': messages
+        })
+    
     cursor.close()
     conn.close()
-    return {"history": history}
+    return {"sessions": grouped_history}
 
 # Endpoint to delete a specific chat history entry
 @app.delete("/chat-history/{chat_id}")
@@ -163,6 +213,33 @@ def delete_all_chat_history():
         return {"success": True, "message": f"Deleted {deleted_count} chat history entries"}
     except Exception as e:
         return {"success": False, "message": f"Error deleting all chat history: {str(e)}"}
+
+# Endpoint to delete an entire session
+@app.delete("/session/{session_id}")
+def delete_session(session_id: str):
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+        
+        # Check if the session exists
+        cursor.execute("SELECT COUNT(*) FROM chat_history WHERE session_id = %s", (session_id,))
+        count = cursor.fetchone()[0]
+        
+        if count == 0:
+            cursor.close()
+            conn.close()
+            return {"success": False, "message": "Session not found"}
+        
+        # Delete all messages in the session
+        cursor.execute("DELETE FROM chat_history WHERE session_id = %s", (session_id,))
+        conn.commit()
+        deleted_count = cursor.rowcount
+        cursor.close()
+        conn.close()
+        
+        return {"success": True, "message": f"Session deleted successfully. {deleted_count} messages removed."}
+    except Exception as e:
+        return {"success": False, "message": f"Error deleting session: {str(e)}"}
 
 if __name__ == "__main__":
     import uvicorn

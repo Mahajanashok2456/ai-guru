@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from "react";
 
 function App() {
-  const [chatHistory, setChatHistory] = useState([]);
-  const [selectedHistory, setSelectedHistory] = useState(null);
+  const [chatSessions, setChatSessions] = useState([]); // Changed from chatHistory to chatSessions
+  const [selectedSession, setSelectedSession] = useState(null); // Changed from selectedHistory to selectedSession
+  const [currentSessionId, setCurrentSessionId] = useState(null); // Track current conversation session
   const [messages, setMessages] = useState([]);
   const [currentInput, setCurrentInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -28,17 +29,30 @@ function App() {
     scrollToBottom();
   }, [messages, isLoading]);
 
-  // Fetch chat history on mount
+  // Fetch chat sessions on mount
   useEffect(() => {
     fetch("http://localhost:8000/chat-history")
       .then((res) => res.json())
       .then((data) => {
-        setChatHistory(data.history || []);
+        console.log("Fetched sessions data:", data);
+        setChatSessions(data.sessions || []);
       })
       .catch((err) => {
-        console.error("Failed to fetch chat history:", err);
+        console.error("Failed to fetch chat sessions:", err);
       });
   }, []);
+
+  // Function to refresh chat sessions
+  const refreshChatSessions = () => {
+    fetch("http://localhost:8000/chat-history")
+      .then((res) => res.json())
+      .then((data) => {
+        setChatSessions(data.sessions || []);
+      })
+      .catch((err) => {
+        console.error("Failed to fetch chat sessions:", err);
+      });
+  };
 
   // Function to cancel all active requests
   const cancelActiveRequests = () => {
@@ -96,6 +110,9 @@ function App() {
 
     const formData = new FormData();
     formData.append("audio", audioBlob, "recording.wav");
+    if (currentSessionId) {
+      formData.append("session_id", currentSessionId);
+    }
 
     try {
       const response = await fetch("http://localhost:8000/voice-chat", {
@@ -109,6 +126,11 @@ function App() {
       }
 
       const data = await response.json();
+
+      // Update session ID if this is a new session
+      if (data.session_id && !currentSessionId) {
+        setCurrentSessionId(data.session_id);
+      }
       const aiMessage = {
         text: data.response,
         sender: "ai",
@@ -117,6 +139,9 @@ function App() {
       setMessages((prev) =>
         prev.map((msg) => (msg.id === loadingMessageId ? aiMessage : msg))
       );
+
+      // Refresh chat sessions to show updated history
+      refreshChatSessions();
     } catch (error) {
       // Don't show error for cancelled requests
       if (error.name === "AbortError") {
@@ -184,7 +209,10 @@ function App() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ message: userInput }),
+        body: JSON.stringify({
+          message: userInput,
+          session_id: currentSessionId,
+        }),
         signal: abortController.signal,
       });
 
@@ -193,6 +221,11 @@ function App() {
       }
 
       const data = await response.json();
+
+      // Update session ID if this is a new session
+      if (data.session_id && !currentSessionId) {
+        setCurrentSessionId(data.session_id);
+      }
 
       // Replace loading message with actual response
       setTimeout(() => {
@@ -212,6 +245,9 @@ function App() {
 
         // Remove from active requests
         activeRequestsRef.current.delete(messageId);
+
+        // Refresh chat sessions to show updated history
+        refreshChatSessions();
       }, 800);
     } catch (error) {
       // Don't show error for cancelled requests
@@ -247,10 +283,10 @@ function App() {
   };
 
   // Delete individual chat history entry
-  const deleteChatHistory = async (chatId) => {
+  const deleteSession = async (sessionId) => {
     try {
       const response = await fetch(
-        `http://localhost:8000/chat-history/${chatId}`,
+        `http://localhost:8000/session/${sessionId}`,
         {
           method: "DELETE",
         }
@@ -260,18 +296,25 @@ function App() {
 
       if (result.success) {
         // Remove from local state
-        setChatHistory((prev) => prev.filter((chat) => chat.id !== chatId));
+        setChatSessions((prev) =>
+          prev.filter((session) => session.session_id !== sessionId)
+        );
 
-        // Clear selected history if it was the deleted one
-        if (selectedHistory && selectedHistory.id === chatId) {
-          setSelectedHistory(null);
+        // Clear selected session if it was the deleted one
+        if (selectedSession && selectedSession.session_id === sessionId) {
+          setSelectedSession(null);
           setMessages([]);
         }
+
+        // If the current session was deleted, reset current session
+        if (currentSessionId === sessionId) {
+          setCurrentSessionId(null);
+        }
       } else {
-        console.error("Failed to delete chat history:", result.message);
+        console.error("Failed to delete session:", result.message);
       }
     } catch (error) {
-      console.error("Error deleting chat history:", error);
+      console.error("Error deleting session:", error);
     }
   };
 
@@ -293,8 +336,9 @@ function App() {
       const result = await response.json();
 
       if (result.success) {
-        setChatHistory([]);
-        setSelectedHistory(null);
+        setChatSessions([]);
+        setSelectedSession(null);
+        setCurrentSessionId(null);
         setMessages([]);
       } else {
         console.error("Failed to delete all chat history:", result.message);
@@ -383,7 +427,8 @@ function App() {
     cancelActiveRequests();
 
     setMessages([]);
-    setSelectedHistory(null);
+    setSelectedSession(null);
+    setCurrentSessionId(null);
     setCurrentInput("");
     setSelectedImage(null);
     setRecordedAudio(null); // Clear recorded audio
@@ -822,7 +867,7 @@ function App() {
                 >
                   Recent Chats
                 </div>
-                {chatHistory.length > 0 && (
+                {chatSessions.length > 0 && (
                   <button
                     onClick={deleteAllChatHistory}
                     style={{
@@ -853,7 +898,7 @@ function App() {
               </div>
             )}
 
-            {chatHistory.length === 0 ? (
+            {chatSessions.length === 0 ? (
               <div
                 style={{
                   color: "#6b7280",
@@ -866,9 +911,9 @@ function App() {
                 {sidebarCollapsed ? "📝" : "No conversations yet"}
               </div>
             ) : (
-              chatHistory.map((entry, index) => (
+              chatSessions.map((session, index) => (
                 <div
-                  key={entry.id}
+                  key={session.session_id}
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -876,7 +921,8 @@ function App() {
                     marginBottom: "4px",
                     borderRadius: "6px",
                     backgroundColor:
-                      selectedHistory && selectedHistory.id === entry.id
+                      selectedSession &&
+                      selectedSession.session_id === session.session_id
                         ? "#2d2d2d"
                         : "transparent",
                     fontSize: "14px",
@@ -886,7 +932,12 @@ function App() {
                     group: true,
                   }}
                   onMouseOver={(e) => {
-                    if (!(selectedHistory && selectedHistory.id === entry.id)) {
+                    if (
+                      !(
+                        selectedSession &&
+                        selectedSession.session_id === session.session_id
+                      )
+                    ) {
                       e.currentTarget.style.backgroundColor = "#2a2a2a";
                     }
                     const deleteBtn =
@@ -896,7 +947,12 @@ function App() {
                     }
                   }}
                   onMouseOut={(e) => {
-                    if (!(selectedHistory && selectedHistory.id === entry.id)) {
+                    if (
+                      !(
+                        selectedSession &&
+                        selectedSession.session_id === session.session_id
+                      )
+                    ) {
                       e.currentTarget.style.backgroundColor = "transparent";
                     }
                     const deleteBtn =
@@ -907,7 +963,32 @@ function App() {
                   }}
                 >
                   <div
-                    onClick={() => setSelectedHistory(entry)}
+                    onClick={() => {
+                      console.log("Selected session:", session);
+                      setSelectedSession(session);
+                      setCurrentSessionId(session.session_id);
+
+                      // Convert session messages to display format
+                      const displayMessages = [];
+                      session.messages.forEach((msg, index) => {
+                        console.log("Processing message:", msg);
+                        // Add user message
+                        displayMessages.push({
+                          id: msg.id * 2 - 1,
+                          text: msg.user_input,
+                          sender: "user",
+                        });
+                        // Add AI response
+                        displayMessages.push({
+                          id: msg.id * 2,
+                          text: msg.bot_response,
+                          sender: "ai",
+                        });
+                      });
+
+                      console.log("Display messages:", displayMessages);
+                      setMessages(displayMessages);
+                    }}
                     style={{
                       flex: 1,
                       cursor: "pointer",
@@ -922,22 +1003,20 @@ function App() {
                         fontSize: "12px",
                         color: "#888",
                         marginBottom: "2px",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "4px",
                       }}
                     >
-                      {entry.input_type === "text" && "💬"}
-                      {entry.input_type === "voice" && "🎤"}
-                      {entry.input_type === "image" && "📷"}
+                      <span>💬</span>
+                      <span>{session.message_count} messages</span>
                     </div>
                     {sidebarCollapsed ? (
                       <div style={{ fontSize: "16px", textAlign: "center" }}>
-                        {entry.input_type === "text" && "💬"}
-                        {entry.input_type === "voice" && "🎤"}
-                        {entry.input_type === "image" && "📷"}
+                        💬
                       </div>
-                    ) : entry.user_input.length > 30 ? (
-                      entry.user_input.substring(0, 30) + "..."
                     ) : (
-                      entry.user_input
+                      session.session_title
                     )}
                   </div>
                   {!sidebarCollapsed && (
@@ -945,7 +1024,7 @@ function App() {
                       className="delete-btn"
                       onClick={(e) => {
                         e.stopPropagation();
-                        deleteChatHistory(entry.id);
+                        deleteSession(session.session_id);
                       }}
                       style={{
                         background: "transparent",
@@ -1003,7 +1082,7 @@ function App() {
             }}
           >
             {/* Welcome Screen */}
-            {!selectedHistory && messages.length === 0 && (
+            {!selectedSession && messages.length === 0 && (
               <div
                 style={{
                   display: "flex",
@@ -1231,58 +1310,6 @@ function App() {
                   >
                     Send voice message
                   </button>
-                </div>
-              </div>
-            )}
-
-            {/* Selected History Display */}
-            {selectedHistory && (
-              <div
-                style={{
-                  padding: "20px",
-                  margin: "20px",
-                  backgroundColor: "#f8fafc",
-                  borderRadius: "12px",
-                  border: "1px solid #e2e8f0",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginBottom: "12px",
-                  }}
-                >
-                  <div style={{ fontSize: "14px", color: "#64748b" }}>
-                    {new Date(selectedHistory.timestamp).toLocaleString()}
-                  </div>
-                  <button
-                    onClick={() => setSelectedHistory(null)}
-                    style={{
-                      padding: "4px 8px",
-                      backgroundColor: "#ef4444",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "6px",
-                      fontSize: "12px",
-                      cursor: "pointer",
-                    }}
-                  >
-                    Close
-                  </button>
-                </div>
-                <div style={{ marginBottom: "8px" }}>
-                  <span style={{ fontWeight: "600", color: "#374151" }}>
-                    User:{" "}
-                  </span>
-                  {selectedHistory.user_input}
-                </div>
-                <div>
-                  <span style={{ fontWeight: "600", color: "#374151" }}>
-                    Bot:{" "}
-                  </span>
-                  {selectedHistory.bot_response}
                 </div>
               </div>
             )}
