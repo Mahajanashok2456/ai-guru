@@ -31,7 +31,7 @@ function App() {
 
   // Fetch chat sessions on mount
   useEffect(() => {
-    fetch("http://localhost:8000/chat-history")
+    fetch("http://localhost:8001/chat-history")
       .then((res) => res.json())
       .then((data) => {
         console.log("Fetched sessions data:", data);
@@ -44,7 +44,7 @@ function App() {
 
   // Function to refresh chat sessions
   const refreshChatSessions = () => {
-    fetch("http://localhost:8000/chat-history")
+    fetch("http://localhost:8001/chat-history")
       .then((res) => res.json())
       .then((data) => {
         setChatSessions(data.sessions || []);
@@ -115,7 +115,7 @@ function App() {
     }
 
     try {
-      const response = await fetch("http://localhost:8000/voice-chat", {
+      const response = await fetch("http://localhost:8001/voice-chat", {
         method: "POST",
         body: formData,
         signal: abortController.signal,
@@ -204,7 +204,7 @@ function App() {
     activeRequestsRef.current.set(messageId, abortController);
 
     try {
-      const response = await fetch("http://localhost:8000/chat", {
+      const response = await fetch("http://localhost:8001/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -286,7 +286,7 @@ function App() {
   const deleteSession = async (sessionId) => {
     try {
       const response = await fetch(
-        `http://localhost:8000/session/${sessionId}`,
+        `http://localhost:8001/session/${sessionId}`,
         {
           method: "DELETE",
         }
@@ -329,7 +329,7 @@ function App() {
     }
 
     try {
-      const response = await fetch("http://localhost:8000/chat-history", {
+      const response = await fetch("http://localhost:8001/chat-history", {
         method: "DELETE",
       });
 
@@ -377,7 +377,7 @@ function App() {
           const formData = new FormData();
           formData.append("audio", audioBlob, "recording.wav");
 
-          const response = await fetch("http://localhost:8000/transcribe", {
+          const response = await fetch("http://localhost:8001/transcribe", {
             method: "POST",
             body: formData,
           });
@@ -487,7 +487,7 @@ function App() {
     activeRequestsRef.current.set(messageId, abortController);
 
     try {
-      const response = await fetch("http://localhost:8000/image-chat", {
+      const response = await fetch("http://localhost:8001/image-chat", {
         method: "POST",
         body: formData,
         signal: abortController.signal,
@@ -1285,31 +1285,6 @@ function App() {
                   >
                     Upload an image
                   </button>
-                  <button
-                    onClick={handleVoiceRecording}
-                    style={{
-                      padding: "12px 20px",
-                      backgroundColor: "#ECDFCC",
-                      border: "1px solid #697565",
-                      borderRadius: "20px",
-                      color: "#181C14",
-                      fontSize: "14px",
-                      cursor: "pointer",
-                      transition: "all 0.2s ease",
-                    }}
-                    onMouseOver={(e) => {
-                      e.target.style.backgroundColor = "#697565";
-                      e.target.style.borderColor = "#3C3D37";
-                      e.target.style.color = "#ECDFCC";
-                    }}
-                    onMouseOut={(e) => {
-                      e.target.style.backgroundColor = "#ECDFCC";
-                      e.target.style.borderColor = "#697565";
-                      e.target.style.color = "#181C14";
-                    }}
-                  >
-                    Send voice message
-                  </button>
                 </div>
               </div>
             )}
@@ -1583,47 +1558,6 @@ function App() {
                     ✕
                   </button>
                 )}
-                {/* Voice Button */}
-                <button
-                  type="button"
-                  onClick={handleVoiceRecording}
-                  className="button-hover"
-                  style={{
-                    padding: "12px",
-                    background: isRecording
-                      ? "linear-gradient(135deg, #ef4444, #dc2626)"
-                      : "linear-gradient(135deg, #ECDFCC, #F5F0E8)",
-                    border: isRecording
-                      ? "2px solid #fca5a5"
-                      : "2px solid #697565",
-                    borderRadius: "50%",
-                    cursor: "pointer",
-                    color: isRecording ? "white" : "#697565",
-                    fontSize: "18px",
-                    transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-                    boxShadow: isRecording
-                      ? "0 4px 15px rgba(239, 68, 68, 0.4)"
-                      : "0 2px 8px rgba(0, 0, 0, 0.1)",
-                    animation: isRecording ? "pulse 1.5s infinite" : "none",
-                    position: "relative",
-                    overflow: "hidden",
-                  }}
-                  onMouseOver={(e) => {
-                    if (!isRecording) {
-                      e.target.style.transform = "scale(1.05)";
-                      e.target.style.boxShadow =
-                        "0 4px 15px rgba(107, 114, 128, 0.2)";
-                    }
-                  }}
-                  onMouseOut={(e) => {
-                    if (!isRecording) {
-                      e.target.style.transform = "scale(1)";
-                      e.target.style.boxShadow = "0 2px 8px rgba(0, 0, 0, 0.1)";
-                    }
-                  }}
-                >
-                  {isRecording ? "⏹️" : "🎤"}
-                </button>{" "}
                 {/* Send Button */}
                 <button
                   type="submit"

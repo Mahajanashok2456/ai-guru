@@ -1,19 +1,30 @@
-from fastapi import FastAPI, Body, UploadFile, File
+from fastapi import FastAPI, Body, UploadFile, File, HTTPException
 import mysql.connector
-import whisper
 import tempfile
 import os
 import base64
 from fastapi.middleware.cors import CORSMiddleware
-import ollama
+import google.generativeai as genai
+from dotenv import load_dotenv
+from PIL import Image
+import io
 
+# Load environment variables
+load_dotenv()
+
+# Configure Gemini
+genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
+
+# Initialize Gemini models with free tier compatible names
+text_model = genai.GenerativeModel('gemini-1.5-flash-8b')
+vision_model = genai.GenerativeModel('gemini-1.5-flash-8b')  # Using same model for both
 
 # MySQL connection config
 db_config = {
-    'host': 'localhost',
-    'user': 'root',
-    'password': '2456',
-    'database': 'guru_multibot',
+    'host': os.getenv('DB_HOST', 'localhost'),
+    'user': os.getenv('DB_USER', 'root'),
+    'password': os.getenv('DB_PASSWORD', '2456'),
+    'database': os.getenv('DB_NAME', 'guru_multibot'),
     'port': 3306
 }
 
@@ -52,81 +63,81 @@ app.add_middleware(
 
 @app.post("/chat")
 async def chat_endpoint(data: dict = Body(...)):
-    text = data.get("message")
-    session_id = data.get("session_id")  # Get session_id from frontend
-    response = ollama.chat(model='mistral', messages=[{'role': 'user', 'content': text}])
-    bot_response = response['message']['content']
-    session_id = store_interaction('text', text, bot_response, session_id)
-    return {"response": bot_response, "session_id": session_id}
-
-@app.post("/voice-chat")
-async def voice_chat(audio: UploadFile = File(...), session_id: str = None):
-    # Create temporary file for audio
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_file:
-        content = await audio.read()
-        temp_file.write(content)
-        temp_path = temp_file.name
-
     try:
-        # Load Whisper model (use 'base' for speed, adjust as needed)
-        model = whisper.load_model("base")
-        result = model.transcribe(temp_path)
-        transcribed_text = result["text"].strip()
-
-        if not transcribed_text:
-            return {"response": "Sorry, I couldn't understand the audio."}
-
-        # Query Ollama with transcribed text
-        ollama_response = ollama.chat(model='mistral', messages=[{'role': 'user', 'content': transcribed_text}])
-        response_text = ollama_response['message']['content']
-        session_id = store_interaction('voice', transcribed_text, response_text, session_id)
-        return {"response": response_text, "session_id": session_id}
-    finally:
-        # Clean up temp file
-        if os.path.exists(temp_path):
-            os.unlink(temp_path)
-
-@app.post("/transcribe")
-async def transcribe_audio(audio: UploadFile = File(...)):
-    # Create temporary file for audio
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_file:
-        content = await audio.read()
-        temp_file.write(content)
-        temp_path = temp_file.name
-
-    try:
-        # Load Whisper model (use 'base' for speed)
-        model = whisper.load_model("base")
-        result = model.transcribe(temp_path)
-        transcribed_text = result["text"].strip()
+        text = data.get("message")
+        session_id = data.get("session_id")  # Get session_id from frontend
         
-        return {"transcription": transcribed_text}
-    finally:
-        # Clean up temp file
-        if os.path.exists(temp_path):
-            os.unlink(temp_path)
+        print(f"Received message: {text}")
+        print(f"API Key loaded: {'Yes' if os.getenv('GEMINI_API_KEY') else 'No'}")
+        
+        if not text or not text.strip():
+            raise HTTPException(status_code=400, detail="Message cannot be empty")
+        
+        # Generate response using Gemini
+        print("Calling Gemini API...")
+        response = text_model.generate_content(text.strip())
+        bot_response = response.text if response.text else "Sorry, I couldn't generate a response."
+        print(f"Gemini response: {bot_response[:100]}...")
+        
+        # Store interaction in database
+        session_id = store_interaction('text', text, bot_response, session_id)
+        return {"response": bot_response, "session_id": session_id}
+    except Exception as e:
+        print(f"Error in chat endpoint: {str(e)}")
+        import traceback
+        print(traceback.format_exc())
+        
+        # Handle specific API errors
+        error_message = str(e)
+        if "quota" in error_message.lower() or "429" in error_message:
+            error_detail = "API quota exceeded. Please wait a moment and try again, or check your Gemini API billing settings."
+        elif "404" in error_message and "model" in error_message.lower():
+            error_detail = "Model not found. Please check your Gemini API configuration."
+        elif "api key" in error_message.lower() or "authentication" in error_message.lower():
+            error_detail = "Invalid API key. Please check your Gemini API key configuration."
+        else:
+            error_detail = f"Error generating response: {str(e)}"
+            
+        raise HTTPException(status_code=500, detail=error_detail)
+
+# Test endpoint to verify Gemini API connection
+@app.get("/test-gemini")
+async def test_gemini():
+    try:
+        api_key = os.getenv('GEMINI_API_KEY')
+        if not api_key or api_key == "your_gemini_api_key_here":
+            return {"status": "error", "message": "Gemini API key not configured"}
+        
+        # Test simple request
+        response = text_model.generate_content("Say hello")
+        return {"status": "success", "message": "Gemini API working", "response": response.text}
+    except Exception as e:
+        return {"status": "error", "message": f"Gemini API error: {str(e)}"}
+
+# Voice chat functionality removed - not supported with Gemini API only
+# Use text chat instead
 
 @app.post("/image-chat")
-async def image_chat(image: UploadFile = File(...), text: str = Body(..., embed=True)):
-    if not text:
-        text = "Describe this image."
-    
-    image_bytes = await image.read()
-    image_b64 = base64.b64encode(image_bytes).decode('utf-8')
-    
-    response = ollama.chat(
-        model='llava',
-        messages=[
-            {
-                'role': 'user',
-                'content': text,
-                'images': [image_b64]
-            }
-        ]
-    )
-    bot_response = response['message']['content']
-    store_interaction('image', text, bot_response)
-    return {"response": bot_response}
+async def image_chat(image: UploadFile = File(...), text: str = Body(..., embed=True), session_id: str = Body(None, embed=True)):
+    try:
+        if not text:
+            text = "Describe this image."
+        
+        # Read image data
+        image_bytes = await image.read()
+        
+        # Convert to PIL Image for Gemini
+        pil_image = Image.open(io.BytesIO(image_bytes))
+        
+        # Generate response using Gemini Vision
+        response = vision_model.generate_content([text, pil_image])
+        bot_response = response.text
+        
+        # Store interaction in database
+        session_id = store_interaction('image', text, bot_response, session_id)
+        return {"response": bot_response, "session_id": session_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing image: {str(e)}")
 
 # Endpoint to fetch all chat history grouped by sessions
 @app.get("/chat-history")
@@ -243,4 +254,8 @@ def delete_session(session_id: str):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    print("🚀 Starting AI Guru Multibot Backend...")
+    print("📡 API Documentation: http://localhost:8001/docs")
+    print("🔗 Chat API: http://localhost:8001/chat")
+    print("🧪 Test Gemini: http://localhost:8001/test-gemini")
+    uvicorn.run(app, host="0.0.0.0", port=8001)

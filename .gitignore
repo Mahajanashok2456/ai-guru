@@ -12,12 +12,37 @@ build/
 # VSCode
 .vscode/
 
-# Environment
+# Environment variables
 .env
+.env.local
+.env.production
+.env.staging
+
+# API Keys and credentials
+config.json
+secrets.json
+credentials.json
+service-account.json
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
 
 # Large files and media
 *.wav
 *.mp3
+*.mp4
+*.avi
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
 *.png
 *.jpg
 *.jpeg
