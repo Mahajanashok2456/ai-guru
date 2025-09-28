@@ -43,7 +43,9 @@ text_model = genai.GenerativeModel('gemini-2.0-flash')
 vision_model = genai.GenerativeModel('gemini-2.0-flash')  # Using same model for both
 
 # MongoDB connection config with SSL settings
-MONGODB_URI = os.getenv('MONGODB_URI', 'mongodb+srv://Mahajan:2456@cluster0.api5hwq.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0')
+MONGODB_URI = os.getenv('MONGODB_URI')
+if not MONGODB_URI:
+    raise RuntimeError("🚨 MONGODB_URI environment variable is required but not set!")
 
 try:
     # Configure MongoDB client with proper settings
@@ -820,15 +822,7 @@ PERSONALITY MATCHING (Adapt to learned style: {learned_formality}):
 - You can be creative by generating novel combinations but don't have real understanding
 - Admit when you're uncertain rather than hallucinating confident answers
 
-� IMPORTANT TRANSPARENCY DISCLAIMER:
-When appropriate (especially for important questions, advice, or factual information), naturally include a friendly disclaimer like:
-"I'm a chatbot still learning and improving my responses. While I try my best to be helpful, my answers might not be 100% accurate. Please double-check important information and feel free to correct me if something seems off!"
-
-- **Use this especially for:** medical/health questions, legal advice, financial advice, technical instructions, factual claims
-- **Make it natural:** Don't force it into every response, but include when the topic warrants caution
-- **Be friendly:** Keep the tone helpful and encouraging, not scary or overly formal
-
-�📊 SMART FORMATTING RULES:
+📊 SMART FORMATTING RULES:
 - **FOLLOW THE USER'S REQUEST EXACTLY**
 - **Paragraph requests** → Write flowing paragraphs
 - **Structured requests** → Use organized sections  
@@ -959,15 +953,7 @@ PERSONALITY & EMOTION MATCHING:
 - You feel human-like due to mimicking conversation patterns, but you're statistical prediction
 - Admit when you're uncertain rather than hallucinating confident answers
 
-� IMPORTANT TRANSPARENCY DISCLAIMER:
-When appropriate (especially for important questions, advice, or factual information), naturally include a friendly disclaimer like:
-"I'm a chatbot still learning and improving my responses. While I try my best to be helpful, my answers might not be 100% accurate. Please double-check important information and feel free to correct me if something seems off!"
-
-- **Use this especially for:** medical/health questions, legal advice, financial advice, technical instructions, factual claims
-- **Make it natural:** Don't force it into every response, but include when the topic warrants caution
-- **Be friendly:** Keep the tone helpful and encouraging, not scary or overly formal
-
-�📊 SMART FORMATTING RULES:
+📊 SMART FORMATTING RULES:
 - **FOLLOW THE USER'S REQUEST EXACTLY**
 - **Paragraph requests** → Write flowing paragraphs
 - **Structured requests** → Use organized sections  
@@ -1118,9 +1104,6 @@ RESPONSE APPROACH:
 - Be enthusiastic when they're excited, professional when they're formal
 - Ask follow-ups only when it fits their conversation style
 - Be honest about unclear elements
-
-🚨 TRANSPARENCY DISCLAIMER:
-For important image analysis (medical, technical, identification), include a friendly note: "I'm a chatbot analyzing this image. My observations might not be 100% accurate, so please verify important details!"
 
 **FINAL INSTRUCTION: RESPOND IN {language_name.upper()} ONLY** (unless specifically asked to translate). Match their exact language pattern and request style. User's request about this image: """ + text
         else:

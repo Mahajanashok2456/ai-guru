@@ -12,17 +12,25 @@ build/
 # VSCode
 .vscode/
 
-# Environment variables
-.env
+# Environment variables - CRITICAL SECURITY
+.env*
+!.env.example
 .env.local
 .env.production
 .env.staging
+.env.development
+.env.test
 
-# API Keys and credentials
+# API Keys and credentials - NEVER COMMIT THESE
 config.json
 secrets.json
 credentials.json
 service-account.json
+*.key
+*.pem
+*.p12
+*-key.json
+auth.json
 
 # Database
 *.db

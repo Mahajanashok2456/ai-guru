@@ -80,20 +80,30 @@ An advanced multimodal AI chat agent with **self-learning capabilities** built o
    pip install -r requirements.txt
    ```
 
-5. **Configure environment variables**:
-   Create `.env` file in backend/ directory:
+5. **🔒 Configure environment variables** (SECURITY CRITICAL):
+
+   **Copy the example file and add your credentials:**
+
+   ```bash
+   cd backend
+   cp .env.example .env
+   ```
+
+   **Then edit `.env` file with your actual credentials:**
 
    ```env
-   GEMINI_API_KEY=your_gemini_api_key_here
-   MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/ai_guru_db
+   GEMINI_API_KEY=your_actual_gemini_api_key_here
+   MONGODB_URI=mongodb+srv://your_username:your_password@your_cluster.mongodb.net/ai_guru_db
    ENVIRONMENT=development
    ```
 
-   **Environment Setup Guide:**
+   **🔒 SECURITY REQUIREMENTS:**
 
-   - `GEMINI_API_KEY`: Get from [Google AI Studio](https://makersuite.google.com/)
-   - `MONGODB_URI`: Get from [MongoDB Atlas](https://www.mongodb.com/cloud/atlas) (free tier available)
+   - `GEMINI_API_KEY`: Get from [Google AI Studio](https://makersuite.google.com/) - **Keep Secret!**
+   - `MONGODB_URI`: Get from [MongoDB Atlas](https://www.mongodb.com/cloud/atlas) - **Never Commit!**
    - `ENVIRONMENT`: Set to `production` for live deployment (hides API docs)
+
+   **⚠️ CRITICAL: Never commit .env files to Git - they contain sensitive credentials!**
 
 ### Frontend (React)
 
@@ -356,6 +366,64 @@ curl -X POST http://localhost:8001/chat -H "Content-Type: application/json" -d '
 # View learning analytics
 curl http://localhost:8001/learning-analytics
 ```
+
+## 🔒 Security Best Practices
+
+### **⚠️ CRITICAL SECURITY MEASURES**
+
+**1. Environment Variables Security:**
+
+```bash
+# ✅ ALWAYS use .env files for credentials
+cp backend/.env.example backend/.env
+# ❌ NEVER commit .env files to Git
+# ❌ NEVER hardcode credentials in source code
+```
+
+**2. MongoDB Atlas Security:**
+
+- **Enable IP Whitelisting**: Add your server IP to MongoDB Atlas Network Access
+- **Strong Passwords**: Use complex passwords with special characters
+- **Database User Permissions**: Create specific database users with minimal required permissions
+- **Regular Rotation**: Rotate database passwords every 90 days
+
+**3. API Key Protection:**
+
+- **Gemini API Key**: Restrict API key usage to specific IP addresses if possible
+- **Rate Limiting**: Monitor API usage to prevent abuse
+- **Key Rotation**: Regularly regenerate API keys
+
+**4. Production Security:**
+
+```bash
+# Set production environment
+ENVIRONMENT=production
+
+# Security features (already configured in main.py):
+# - CORS protection
+# - Rate limiting
+# - Input validation
+# - Error handling without sensitive data exposure
+```
+
+**5. Deployment Security:**
+
+- **HTTPS Only**: Always use SSL certificates in production
+- **Environment Isolation**: Never use development credentials in production
+- **Monitoring**: Set up alerts for unusual API usage patterns
+- **Backup Security**: Ensure database backups are encrypted
+
+### **🔍 Security Checklist**
+
+- [ ] `.env` file exists and contains real credentials
+- [ ] `.env` is listed in `.gitignore`
+- [ ] No hardcoded credentials in source code
+- [ ] MongoDB Atlas IP whitelisting enabled
+- [ ] Strong database passwords used
+- [ ] Gemini API key is valid and restricted
+- [ ] Production environment variables set
+- [ ] SSL certificate configured for production
+- [ ] Regular security updates scheduled
 
 ## 🤝 Contributing
 
