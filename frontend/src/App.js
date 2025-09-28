@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { marked } from "marked";
 
 function App() {
   const [chatSessions, setChatSessions] = useState([]); // Changed from chatHistory to chatSessions
@@ -9,16 +10,85 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
-  const [isTyping, setIsTyping] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [processingMessages, setProcessingMessages] = useState(new Set()); // Track which messages are being processed
-  const [recordedAudio, setRecordedAudio] = useState(null); // Store recorded audio blob
   const [isConverting, setIsConverting] = useState(false); // Track if converting voice to text
+
+  // Web Speech API states
+  const [recognition, setRecognition] = useState(null);
+  const [speechSupported, setSpeechSupported] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [speechInterimResult, setSpeechInterimResult] = useState("");
+  const [speechError, setSpeechError] = useState(null);
+  const [feedbackLoading, setFeedbackLoading] = useState(new Set()); // Track feedback submissions
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
   const activeRequestsRef = useRef(new Map()); // Track active requests with their AbortControllers
+
+  // Feedback submission function
+  const submitFeedback = async (
+    interactionId,
+    sessionId,
+    feedbackType,
+    feedbackText = ""
+  ) => {
+    try {
+      setFeedbackLoading((prev) => new Set([...prev, interactionId]));
+
+      const response = await fetch("http://localhost:8001/feedback", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          interaction_id: interactionId,
+          session_id: sessionId,
+          feedback_type: feedbackType,
+          feedback_text: feedbackText,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Show success message briefly
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.interactionId === interactionId
+              ? {
+                  ...msg,
+                  feedbackSubmitted: feedbackType,
+                  feedbackMessage: data.message,
+                }
+              : msg
+          )
+        );
+
+        // Clear feedback message after 3 seconds
+        setTimeout(() => {
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.interactionId === interactionId
+                ? { ...msg, feedbackMessage: null }
+                : msg
+            )
+          );
+        }, 3000);
+      } else {
+        console.error("Feedback submission failed:", data.detail);
+      }
+    } catch (error) {
+      console.error("Error submitting feedback:", error);
+    } finally {
+      setFeedbackLoading((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(interactionId);
+        return newSet;
+      });
+    }
+  };
 
   // Auto-scroll to bottom when new messages arrive
   const scrollToBottom = () => {
@@ -42,6 +112,94 @@ function App() {
       });
   }, []);
 
+  // Initialize Web Speech API
+  useEffect(() => {
+    if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
+      const SpeechRecognition =
+        window.SpeechRecognition || window.webkitSpeechRecognition;
+      const recognitionInstance = new SpeechRecognition();
+
+      // Configure speech recognition for multilingual support
+      recognitionInstance.continuous = false;
+      recognitionInstance.interimResults = true;
+      recognitionInstance.lang = "en-US"; // Default language, can be changed dynamically
+      recognitionInstance.maxAlternatives = 1;
+
+      // Handle speech results
+      recognitionInstance.onresult = (event) => {
+        let finalTranscript = "";
+        let interimTranscript = "";
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript;
+          } else {
+            interimTranscript += transcript;
+          }
+        }
+
+        if (finalTranscript) {
+          console.log("Final speech result:", finalTranscript);
+          setCurrentInput(finalTranscript);
+          setSpeechInterimResult("");
+        } else if (interimTranscript) {
+          console.log("Interim speech result:", interimTranscript);
+          setSpeechInterimResult(interimTranscript);
+        }
+      };
+
+      // Handle speech start
+      recognitionInstance.onstart = () => {
+        console.log("Speech recognition started");
+        setIsListening(true);
+        setSpeechError(null);
+        setSpeechInterimResult("");
+      };
+
+      // Handle speech end
+      recognitionInstance.onend = () => {
+        console.log("Speech recognition ended");
+        setIsListening(false);
+        setSpeechInterimResult("");
+      };
+
+      // Handle speech errors
+      recognitionInstance.onerror = (event) => {
+        console.error("Speech recognition error:", event.error);
+        setIsListening(false);
+        setSpeechInterimResult("");
+
+        let errorMessage = "Speech recognition error: ";
+        switch (event.error) {
+          case "no-speech":
+            errorMessage += "No speech detected. Please try again.";
+            break;
+          case "audio-capture":
+            errorMessage +=
+              "No microphone found. Please check your microphone.";
+            break;
+          case "not-allowed":
+            errorMessage +=
+              "Microphone access denied. Please allow microphone access.";
+            break;
+          case "network":
+            errorMessage += "Network error. Please check your connection.";
+            break;
+          default:
+            errorMessage += event.error;
+        }
+        setSpeechError(errorMessage);
+      };
+
+      setRecognition(recognitionInstance);
+      setSpeechSupported(true);
+    } else {
+      console.log("Speech recognition not supported in this browser");
+      setSpeechSupported(false);
+    }
+  }, []);
+
   // Function to refresh chat sessions
   const refreshChatSessions = () => {
     fetch("http://localhost:8001/chat-history")
@@ -52,6 +210,40 @@ function App() {
       .catch((err) => {
         console.error("Failed to fetch chat sessions:", err);
       });
+  };
+
+  // Web Speech API functions
+  const startSpeechRecognition = () => {
+    if (!speechSupported) {
+      alert(
+        "Speech recognition is not supported in this browser. Please use Chrome or Safari."
+      );
+      return;
+    }
+
+    if (recognition && !isListening) {
+      try {
+        setSpeechError(null);
+        recognition.start();
+      } catch (error) {
+        console.error("Error starting speech recognition:", error);
+        setSpeechError("Failed to start speech recognition: " + error.message);
+      }
+    }
+  };
+
+  const stopSpeechRecognition = () => {
+    if (recognition && isListening) {
+      recognition.stop();
+    }
+  };
+
+  const handleVoiceInput = () => {
+    if (isListening) {
+      stopSpeechRecognition();
+    } else {
+      startSpeechRecognition();
+    }
   };
 
   // Function to cancel all active requests
@@ -135,6 +327,11 @@ function App() {
         text: data.response,
         sender: "ai",
         id: loadingMessageId,
+        detectedLanguage: data.detected_language,
+        languageName: data.language_name,
+        confidence: data.confidence,
+        sessionId: data.session_id || currentSessionId,
+        interactionId: data.interaction_id,
       };
       setMessages((prev) =>
         prev.map((msg) => (msg.id === loadingMessageId ? aiMessage : msg))
@@ -233,6 +430,11 @@ function App() {
           text: data.response,
           sender: "ai",
           id: loadingMessageId,
+          detectedLanguage: data.detected_language,
+          languageName: data.language_name,
+          confidence: data.confidence,
+          sessionId: data.session_id || currentSessionId,
+          interactionId: data.interaction_id,
         };
         setMessages((prev) =>
           prev.map((msg) => (msg.id === loadingMessageId ? aiMessage : msg))
@@ -248,6 +450,18 @@ function App() {
 
         // Refresh chat sessions to show updated history
         refreshChatSessions();
+
+        // Log language detection info (only for non-English languages)
+        if (
+          data.detected_language &&
+          data.language_name &&
+          data.language_name !== "Unknown" &&
+          data.detected_language !== "en"
+        ) {
+          console.log(
+            `🌐 Language detected: ${data.language_name} (${data.detected_language})`
+          );
+        }
       }, 800);
     } catch (error) {
       // Don't show error for cancelled requests
@@ -431,7 +645,6 @@ function App() {
     setCurrentSessionId(null);
     setCurrentInput("");
     setSelectedImage(null);
-    setRecordedAudio(null); // Clear recorded audio
     setIsConverting(false); // Clear conversion state
     setIsLoading(false);
     setIsRecording(false);
@@ -502,10 +715,27 @@ function App() {
         text: data.response,
         sender: "ai",
         id: loadingMessageId,
+        detectedLanguage: data.detected_language,
+        languageName: data.language_name,
+        confidence: data.confidence,
+        sessionId: data.session_id || currentSessionId,
+        interactionId: data.interaction_id,
       };
       setMessages((prev) =>
         prev.map((msg) => (msg.id === loadingMessageId ? aiMessage : msg))
       );
+
+      // Log language detection info for image chat (only for non-English languages)
+      if (
+        data.detected_language &&
+        data.language_name &&
+        data.language_name !== "Unknown" &&
+        data.detected_language !== "en"
+      ) {
+        console.log(
+          `🌐 Image chat language detected: ${data.language_name} (${data.detected_language})`
+        );
+      }
     } catch (error) {
       // Don't show error for cancelled requests
       if (error.name === "AbortError") {
@@ -983,6 +1213,11 @@ function App() {
                           id: msg.id * 2,
                           text: msg.bot_response,
                           sender: "ai",
+                          detectedLanguage: msg.language_code,
+                          languageName: msg.language_name,
+                          sessionId: msg.session_id,
+                          interactionId:
+                            msg._id || `${msg.session_id}_${msg.id * 2}`,
                         });
                       });
 
@@ -1396,7 +1631,256 @@ function App() {
                         </div>
                       </div>
                     ) : (
-                      msg.text
+                      <>
+                        <div
+                          dangerouslySetInnerHTML={{
+                            __html: marked.parse(msg.text || "", {
+                              breaks: true,
+                              gfm: true,
+                            }),
+                          }}
+                          style={{
+                            lineHeight: "1.6",
+                            "& h1, & h2, & h3, & h4, & h5, & h6": {
+                              marginTop: "16px",
+                              marginBottom: "8px",
+                              fontWeight: "bold",
+                            },
+                            "& p": {
+                              marginBottom: "12px",
+                            },
+                            "& ul, & ol": {
+                              marginLeft: "20px",
+                              marginBottom: "12px",
+                            },
+                            "& li": {
+                              marginBottom: "4px",
+                            },
+                            "& strong": {
+                              fontWeight: "bold",
+                              color: "#374151",
+                            },
+                            "& em": {
+                              fontStyle: "italic",
+                            },
+                          }}
+                        />
+                        {/* Language Detection Indicator for AI messages */}
+                        {msg.sender === "ai" &&
+                          msg.detectedLanguage &&
+                          msg.languageName &&
+                          msg.languageName !== "Unknown" &&
+                          msg.detectedLanguage !== "en" && (
+                            <div
+                              style={{
+                                marginTop: "8px",
+                                padding: "6px 10px",
+                                backgroundColor: "rgba(16, 185, 129, 0.1)",
+                                borderRadius: "16px",
+                                fontSize: "12px",
+                                color: "#059669",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                border: "1px solid rgba(16, 185, 129, 0.2)",
+                              }}
+                            >
+                              🌐 {msg.languageName}{" "}
+                              {msg.confidence &&
+                                `(${Math.round(msg.confidence * 100)}%)`}
+                            </div>
+                          )}
+
+                        {/* Feedback Buttons for AI messages */}
+                        {msg.sender === "ai" &&
+                          msg.interactionId &&
+                          !msg.feedbackSubmitted && (
+                            <div
+                              style={{
+                                marginTop: "12px",
+                                display: "flex",
+                                gap: "8px",
+                                alignItems: "center",
+                                flexWrap: "wrap",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  fontSize: "12px",
+                                  color: "#6b7280",
+                                  marginRight: "4px",
+                                }}
+                              >
+                                Was this helpful?
+                              </div>
+                              <button
+                                onClick={() =>
+                                  submitFeedback(
+                                    msg.interactionId,
+                                    msg.sessionId,
+                                    "thumbs_up"
+                                  )
+                                }
+                                disabled={feedbackLoading.has(
+                                  msg.interactionId
+                                )}
+                                style={{
+                                  background: "none",
+                                  border: "1px solid #e5e7eb",
+                                  borderRadius: "16px",
+                                  padding: "4px 8px",
+                                  cursor: "pointer",
+                                  fontSize: "12px",
+                                  color: "#6b7280",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "4px",
+                                  transition: "all 0.2s",
+                                  opacity: feedbackLoading.has(
+                                    msg.interactionId
+                                  )
+                                    ? 0.6
+                                    : 1,
+                                }}
+                                onMouseOver={(e) => {
+                                  e.target.style.backgroundColor = "#f3f4f6";
+                                  e.target.style.borderColor = "#10b981";
+                                  e.target.style.color = "#10b981";
+                                }}
+                                onMouseOut={(e) => {
+                                  e.target.style.backgroundColor =
+                                    "transparent";
+                                  e.target.style.borderColor = "#e5e7eb";
+                                  e.target.style.color = "#6b7280";
+                                }}
+                              >
+                                👍 Yes
+                              </button>
+                              <button
+                                onClick={() =>
+                                  submitFeedback(
+                                    msg.interactionId,
+                                    msg.sessionId,
+                                    "thumbs_down"
+                                  )
+                                }
+                                disabled={feedbackLoading.has(
+                                  msg.interactionId
+                                )}
+                                style={{
+                                  background: "none",
+                                  border: "1px solid #e5e7eb",
+                                  borderRadius: "16px",
+                                  padding: "4px 8px",
+                                  cursor: "pointer",
+                                  fontSize: "12px",
+                                  color: "#6b7280",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "4px",
+                                  transition: "all 0.2s",
+                                  opacity: feedbackLoading.has(
+                                    msg.interactionId
+                                  )
+                                    ? 0.6
+                                    : 1,
+                                }}
+                                onMouseOver={(e) => {
+                                  e.target.style.backgroundColor = "#fef2f2";
+                                  e.target.style.borderColor = "#ef4444";
+                                  e.target.style.color = "#ef4444";
+                                }}
+                                onMouseOut={(e) => {
+                                  e.target.style.backgroundColor =
+                                    "transparent";
+                                  e.target.style.borderColor = "#e5e7eb";
+                                  e.target.style.color = "#6b7280";
+                                }}
+                              >
+                                👎 No
+                              </button>
+                              <select
+                                onChange={(e) => {
+                                  if (e.target.value) {
+                                    submitFeedback(
+                                      msg.interactionId,
+                                      msg.sessionId,
+                                      e.target.value
+                                    );
+                                    e.target.value = "";
+                                  }
+                                }}
+                                disabled={feedbackLoading.has(
+                                  msg.interactionId
+                                )}
+                                style={{
+                                  background: "none",
+                                  border: "1px solid #e5e7eb",
+                                  borderRadius: "16px",
+                                  padding: "4px 8px",
+                                  cursor: "pointer",
+                                  fontSize: "12px",
+                                  color: "#6b7280",
+                                  opacity: feedbackLoading.has(
+                                    msg.interactionId
+                                  )
+                                    ? 0.6
+                                    : 1,
+                                }}
+                              >
+                                <option value="">Issues?</option>
+                                <option value="format_mismatch">
+                                  Wrong format
+                                </option>
+                                <option value="too_long">Too long</option>
+                                <option value="too_short">Too short</option>
+                                <option value="off_topic">Off topic</option>
+                              </select>
+                            </div>
+                          )}
+
+                        {/* Feedback Confirmation Message */}
+                        {msg.sender === "ai" && msg.feedbackSubmitted && (
+                          <div
+                            style={{
+                              marginTop: "8px",
+                              padding: "8px 12px",
+                              backgroundColor: "#f0f9ff",
+                              borderRadius: "16px",
+                              fontSize: "12px",
+                              color: "#0369a1",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "6px",
+                              border: "1px solid #0ea5e9",
+                            }}
+                          >
+                            <span>✓</span>
+                            <span>
+                              Thanks! The AI learned from your{" "}
+                              {msg.feedbackSubmitted.replace("_", " ")}{" "}
+                              feedback.
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Dynamic Feedback Message */}
+                        {msg.sender === "ai" && msg.feedbackMessage && (
+                          <div
+                            style={{
+                              marginTop: "8px",
+                              padding: "8px 12px",
+                              backgroundColor: "#f0fdf4",
+                              borderRadius: "16px",
+                              fontSize: "12px",
+                              color: "#15803d",
+                              border: "1px solid #22c55e",
+                            }}
+                          >
+                            {msg.feedbackMessage}
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
@@ -1415,6 +1899,77 @@ function App() {
               borderTop: "1px solid rgba(0,0,0,0.05)",
             }}
           >
+            {/* Speech Recognition Error Display */}
+            {speechError && (
+              <div
+                style={{
+                  backgroundColor: "#ffebee",
+                  border: "1px solid #f44336",
+                  borderRadius: "8px",
+                  padding: "12px 16px",
+                  margin: "0 0 16px 0",
+                  color: "#c62828",
+                  fontSize: "14px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                }}
+              >
+                <span>⚠️</span>
+                <span>{speechError}</span>
+                <button
+                  type="button"
+                  onClick={() => setSpeechError(null)}
+                  style={{
+                    marginLeft: "auto",
+                    background: "none",
+                    border: "none",
+                    color: "#c62828",
+                    cursor: "pointer",
+                    fontSize: "16px",
+                    padding: "4px",
+                  }}
+                  title="Dismiss error"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
+            {/* Speech Recognition Status */}
+            {isListening && (
+              <div
+                style={{
+                  backgroundColor: "#fff3e0",
+                  border: "1px solid #ff9800",
+                  borderRadius: "8px",
+                  padding: "12px 16px",
+                  margin: "0 0 16px 0",
+                  color: "#e65100",
+                  fontSize: "14px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  animation: "pulse 2s infinite",
+                }}
+              >
+                <span>🎤</span>
+                <span>
+                  Listening for speech... Speak clearly into your microphone.
+                </span>
+                <div
+                  style={{
+                    marginLeft: "auto",
+                    width: "12px",
+                    height: "12px",
+                    backgroundColor: "#ff4444",
+                    borderRadius: "50%",
+                    animation: "pulse 1s infinite",
+                  }}
+                />
+              </div>
+            )}
+
             <form onSubmit={handleSubmit}>
               <div
                 style={{
@@ -1492,14 +2047,20 @@ function App() {
                 {/* Text Input */}
                 <input
                   type="text"
-                  value={currentInput}
+                  value={speechInterimResult || currentInput}
                   onChange={(e) =>
-                    !isConverting && setCurrentInput(e.target.value)
+                    !isConverting &&
+                    !isListening &&
+                    setCurrentInput(e.target.value)
                   }
                   placeholder={
-                    isConverting
+                    isListening
+                      ? "🎤 Listening... Speak now!"
+                      : isConverting
                       ? "Converting voice to text..."
-                      : "Type your message or use voice..."
+                      : speechSupported
+                      ? "Type your message or click 🎤 for voice..."
+                      : "Type your message..."
                   }
                   style={{
                     flex: 1,
@@ -1507,11 +2068,19 @@ function App() {
                     outline: "none",
                     backgroundColor: "transparent",
                     fontSize: "16px",
-                    color: isConverting ? "#697565" : "#181C14",
-                    fontWeight: "500",
+                    color: isListening
+                      ? "#ff4444"
+                      : isConverting
+                      ? "#697565"
+                      : speechInterimResult
+                      ? "#8B4513"
+                      : "#181C14",
+                    fontWeight: isListening ? "600" : "500",
                     transition: "all 0.2s ease",
                     padding: "4px 0",
-                    fontStyle: isConverting ? "italic" : "normal",
+                    fontStyle:
+                      isConverting || isListening ? "italic" : "normal",
+                    opacity: speechInterimResult ? 0.8 : 1,
                   }}
                   onFocus={(e) => {
                     if (!isConverting) {
@@ -1525,7 +2094,7 @@ function App() {
                       e.target.style.transform = "translateY(0)";
                     }
                   }}
-                  disabled={isLoading || isConverting}
+                  disabled={isLoading || isConverting || isListening}
                 />
                 {/* Clear Transcription Button */}
                 {currentInput && !isConverting && (
@@ -1558,6 +2127,63 @@ function App() {
                     ✕
                   </button>
                 )}
+
+                {/* Voice Button */}
+                {speechSupported && (
+                  <button
+                    type="button"
+                    onClick={handleVoiceInput}
+                    disabled={isLoading || isConverting}
+                    style={{
+                      padding: "12px",
+                      backgroundColor: isListening ? "#ff4444" : "#8B4513",
+                      border: isListening
+                        ? "2px solid #ff6666"
+                        : "2px solid #A0522D",
+                      borderRadius: "50%",
+                      cursor:
+                        isLoading || isConverting ? "not-allowed" : "pointer",
+                      color: "white",
+                      fontSize: "18px",
+                      fontWeight: "bold",
+                      transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                      transform: "scale(1)",
+                      boxShadow: isListening
+                        ? "0 4px 15px rgba(255, 68, 68, 0.4), 0 0 20px rgba(255, 68, 68, 0.3)"
+                        : "0 4px 15px rgba(139, 69, 19, 0.4)",
+                      background: isListening
+                        ? "linear-gradient(135deg, #ff4444 0%, #cc0000 100%)"
+                        : "linear-gradient(135deg, #8B4513 0%, #654321 100%)",
+                      animation: isListening ? "pulse 1.5s infinite" : "none",
+                      marginRight: "8px",
+                      opacity: isLoading || isConverting ? 0.6 : 1,
+                    }}
+                    onMouseOver={(e) => {
+                      if (!isLoading && !isConverting) {
+                        e.target.style.transform = "scale(1.1)";
+                        e.target.style.boxShadow = isListening
+                          ? "0 8px 25px rgba(255, 68, 68, 0.6), 0 0 30px rgba(255, 68, 68, 0.4)"
+                          : "0 8px 25px rgba(139, 69, 19, 0.6), 0 0 20px rgba(139, 69, 19, 0.4)";
+                      }
+                    }}
+                    onMouseOut={(e) => {
+                      if (!isLoading && !isConverting) {
+                        e.target.style.transform = "scale(1)";
+                        e.target.style.boxShadow = isListening
+                          ? "0 4px 15px rgba(255, 68, 68, 0.4), 0 0 20px rgba(255, 68, 68, 0.3)"
+                          : "0 4px 15px rgba(139, 69, 19, 0.4)";
+                      }
+                    }}
+                    title={
+                      isListening
+                        ? "Click to stop voice input"
+                        : "Click to start voice input"
+                    }
+                  >
+                    {isListening ? "🛑" : "🎤"}
+                  </button>
+                )}
+
                 {/* Send Button */}
                 <button
                   type="submit"
@@ -1654,6 +2280,24 @@ function App() {
                 </button>
               </div>
             </form>
+
+            {/* Disclaimer */}
+            <div
+              style={{
+                textAlign: "center",
+                padding: "8px 5px",
+                fontSize: "11px",
+                color: "rgba(105, 117, 101, 0.7)",
+                background: "transparent",
+                borderTop: "1px solid rgba(105, 117, 101, 0.1)",
+                fontWeight: "400",
+                letterSpacing: "0.2px",
+                lineHeight: "1.0",
+              }}
+            >
+              AI Guru’s got the brains, but it’s still learning the ropes—verify
+              important stuff, just in case!
+            </div>
 
             {/* Hidden file input */}
             <input

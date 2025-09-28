@@ -5,6 +5,7 @@ charset-normalizer==3.4.3
 click==8.2.1
 colorama==0.4.6
 fastapi==0.116.2
+langdetect==1.0.9
 filelock==3.19.1
 fsspec==2025.9.0
 h11==0.16.0
