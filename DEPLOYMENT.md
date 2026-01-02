@@ -34,6 +34,7 @@ We will use:
     *   Add the keys from your local `.env` file:
         *   `ATLAS_URI`: (Your MongoDB Connection String)
         *   `GEMINI_API_KEY`: (Your Google Gemini API Key)
+        *   `ALLOWED_ORIGINS`: (Your Vercel URL, e.g., `https://your-app.vercel.app`)
 6.  Click **Create Web Service**.
 7.  Wait for it to deploy. Once live, copy the **URL** (e.g., `https://wisdom-backend.onrender.com`).
 
