@@ -133,6 +133,16 @@ def get_adaptive_prompt(question: str, context: List[Dict]) -> str:
     2. Uses retrieved context (Knowledge Base).
     3. Frames the answer accordingly.
     """
+    # Detect if this is a simple factual question
+    simple_question_patterns = ['who is', 'what is', 'who was', 'what was', 'define', 'tell me about']
+    is_simple_question = any(pattern in question.lower() for pattern in simple_question_patterns)
+    
+    # Determine appropriate response length
+    if is_simple_question:
+        length_instruction = "**Length**: Keep it BRIEF. Provide 2-3 sentences maximum. Be direct and concise."
+    else:
+        length_instruction = "**Length**: Provide 1-2 paragraphs (max 4-5 sentences total). Be thoughtful but concise."
+    
     if not context:
         # Fallback if no context found (relying on internal knowledge)
         return f"""
@@ -144,6 +154,7 @@ def get_adaptive_prompt(question: str, context: List[Dict]) -> str:
         1. **Analyze Tone & Intent**: Determine the user's emotional state and underlying need.
         2. **Internal Knowledge**: Since no specific text was retrieved, access your internal knowledge of the Mahabharata and Ramayana.
         3. **Frame the Answer**:
+           - {length_instruction}
            - **Tone Matching**: Adapt your language to the user's tone. Be empathetic if they are emotional, precise if they are factual.
            - **Seamless Delivery**: Provide the wisdom/facts directly. Do not apologize for not finding text. Just give the best answer you can based on the Epics.
         """
@@ -156,15 +167,15 @@ def get_adaptive_prompt(question: str, context: List[Dict]) -> str:
     USER INPUT: "{question}"
 
     ### INSTRUCTIONS:
-    1. **Analyze Tone & Intent**: First, rigorously understand what the user is really asking and how they are feeling (e.g., Are they distressed? Curious? Skeptical? seeking validation?).
+    1. **Analyze Tone & Intent**: Understand what the user is really asking and how they are feeling (e.g., Are they distressed? Curious? Skeptical? seeking validation?).
     2. **Check Facts (Knowledge Base)**: Use ONLY the following retrieved fragments from the Ancient Epics as your source of truth.
        - KNOWLEDGE BASE:
        {context_str}
     3. **Frame the Answer**:
        - Synthesize the answer using the knowledge above.
-       - **Length**: KEEP IT CONCISE. Do not write an essay. Provide 1-2 powerful paragraphs (max 4-5 sentences total).
-       - **Tone Matching**: THIS IS CRITICAL. If the user is sad, be a comforting friend. If they are asking a sharp question, be a sharp scholar. Match their energy.
-       - **Seamless Integration**: Do NOT say "The Knowledge Base says" or "In the text". Speak the answer as if it is your own deep wisdom. weaving the facts naturally into your response.
+       - {length_instruction}
+       - **Tone Matching**: If the user is sad, be a comforting friend. If they are asking a sharp question, be a sharp scholar. Match their energy.
+       - **Seamless Integration**: Do NOT say "The Knowledge Base says" or "In the text". Speak the answer as if it is your own deep wisdom, weaving the facts naturally into your response.
     """
 
 def perform_vector_search(query: str, limit: int = 5) -> List[Dict]:
