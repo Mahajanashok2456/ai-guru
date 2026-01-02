@@ -21,7 +21,15 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="Mahabharata & Ramayana Chat API", version="1.0.0")
 
 # Add CORS middleware
-allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+# Allow both local development and production frontend URLs
+allowed_origins = os.getenv(
+    "ALLOWED_ORIGINS", 
+    "http://localhost:3000,https://mitra-frontend.vercel.app"
+).split(",")
+
+# Strip whitespace from origins
+allowed_origins = [origin.strip() for origin in allowed_origins]
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
