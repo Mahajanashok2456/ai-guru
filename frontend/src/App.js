@@ -14,6 +14,7 @@ import { useFeedback } from './hooks/useFeedback';
 function App() {
   const fileInputRef = useRef(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const {
     messages,
@@ -220,10 +221,7 @@ function App() {
         }
       `}</style>
 
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
-  return (
-    <div className="app-container">
+      <div className="app-container">
       {/* Mobile Menu Button */}
       <button 
         className="mobile-menu-btn"
