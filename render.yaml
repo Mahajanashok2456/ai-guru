@@ -1,0 +1,28 @@
+services:
+  # 🐍 Backend (FastAPI)
+  - type: web
+    name: guru-backend
+    env: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: ENVIRONMENT
+        value: production
+      # You will need to add GEMINI_API_KEY and MONGODB_URI in the Render Dashboard manually for security
+
+  # ⚛️ Frontend (React)
+  - type: static
+    name: guru-frontend
+    env: node
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./build
+    envVars:
+      - key: REACT_APP_API_URL
+        fromService:
+          type: web
+          name: guru-backend
+          property: url

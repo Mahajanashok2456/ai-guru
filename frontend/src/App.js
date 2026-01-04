@@ -2,6 +2,9 @@ import React, { useState, useRef, useEffect } from "react";
 import { marked } from "marked";
 
 function App() {
+  // Configuration for API URL - supports both local development and production deployment
+  const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:8001";
+
   const [chatSessions, setChatSessions] = useState([]); // Changed from chatHistory to chatSessions
   const [selectedSession, setSelectedSession] = useState(null); // Changed from selectedHistory to selectedSession
   const [currentSessionId, setCurrentSessionId] = useState(null); // Track current conversation session
@@ -37,7 +40,9 @@ function App() {
     try {
       setFeedbackLoading((prev) => new Set([...prev, interactionId]));
 
-      const response = await fetch("http://localhost:8001/feedback", {
+      setFeedbackLoading((prev) => new Set([...prev, interactionId]));
+
+      const response = await fetch(`${API_BASE_URL}/feedback`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -101,7 +106,7 @@ function App() {
 
   // Fetch chat sessions on mount
   useEffect(() => {
-    fetch("http://localhost:8001/chat-history")
+    fetch(`${API_BASE_URL}/chat-history`)
       .then((res) => res.json())
       .then((data) => {
         console.log("Fetched sessions data:", data);
@@ -202,7 +207,7 @@ function App() {
 
   // Function to refresh chat sessions
   const refreshChatSessions = () => {
-    fetch("http://localhost:8001/chat-history")
+    fetch(`${API_BASE_URL}/chat-history`)
       .then((res) => res.json())
       .then((data) => {
         setChatSessions(data.sessions || []);
@@ -307,7 +312,7 @@ function App() {
     }
 
     try {
-      const response = await fetch("http://localhost:8001/voice-chat", {
+      const response = await fetch(`${API_BASE_URL}/voice-chat`, {
         method: "POST",
         body: formData,
         signal: abortController.signal,
@@ -401,7 +406,7 @@ function App() {
     activeRequestsRef.current.set(messageId, abortController);
 
     try {
-      const response = await fetch("http://localhost:8001/chat", {
+      const response = await fetch(`${API_BASE_URL}/chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -500,7 +505,7 @@ function App() {
   const deleteSession = async (sessionId) => {
     try {
       const response = await fetch(
-        `http://localhost:8001/session/${sessionId}`,
+        `${API_BASE_URL}/session/${sessionId}`,
         {
           method: "DELETE",
         }
@@ -543,7 +548,7 @@ function App() {
     }
 
     try {
-      const response = await fetch("http://localhost:8001/chat-history", {
+      const response = await fetch(`${API_BASE_URL}/chat-history`, {
         method: "DELETE",
       });
 
@@ -591,7 +596,7 @@ function App() {
           const formData = new FormData();
           formData.append("audio", audioBlob, "recording.wav");
 
-          const response = await fetch("http://localhost:8001/transcribe", {
+          const response = await fetch(`${API_BASE_URL}/transcribe`, {
             method: "POST",
             body: formData,
           });
@@ -700,7 +705,7 @@ function App() {
     activeRequestsRef.current.set(messageId, abortController);
 
     try {
-      const response = await fetch("http://localhost:8001/image-chat", {
+      const response = await fetch(`${API_BASE_URL}/image-chat`, {
         method: "POST",
         body: formData,
         signal: abortController.signal,
