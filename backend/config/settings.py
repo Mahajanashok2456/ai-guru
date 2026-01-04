@@ -36,8 +36,7 @@ ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
 ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:3001",
-    # Add your production domains here
-    # "https://your-app.vercel.app"
+    "https://ai-guru-sage.vercel.app",
 ]
 
 # Environment
