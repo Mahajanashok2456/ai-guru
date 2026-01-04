@@ -13,25 +13,9 @@ function ChatWindow({
   fileInputRef,
 }) {
   return (
-    <div
-      style={{
-        flex: 1,
-        display: "flex",
-        flexDirection: "column",
-        background: "linear-gradient(180deg, #ECDFCC 0%, #F5F0E8 100%)",
-        borderRadius: "20px 0 0 0",
-        boxShadow: "inset 0 1px 0 rgba(105, 117, 101, 0.1)",
-        overflow: "hidden",
-      }}
-    >
+    <div className="chat-window">
       {/* Chat Messages */}
-      <div
-        style={{
-          flex: 1,
-          overflowY: "auto",
-          padding: "0",
-        }}
-      >
+      <div className="messages-container">
         {/* Welcome Screen */}
         {!selectedSession && messages.length === 0 && (
           <div
@@ -146,6 +130,7 @@ function ChatWindow({
               </svg>
             </div>
             <h1
+              className="welcome-title"
               style={{
                 fontSize: "32px",
                 fontWeight: "700",

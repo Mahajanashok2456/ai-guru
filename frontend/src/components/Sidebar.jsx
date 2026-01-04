@@ -2,6 +2,7 @@ import React from 'react';
 
 function Sidebar({
   collapsed,
+  mobileOpen,
   onToggleCollapse,
   sessions,
   selectedSession,
@@ -12,19 +13,8 @@ function Sidebar({
 }) {
   return (
     <div
-      style={{
-        width: collapsed ? "80px" : "260px",
-        background: "linear-gradient(180deg, #181C14 0%, #3C3D37 100%)",
-        color: "#ECDFCC",
-        display: "flex",
-        flexDirection: "column",
-        borderRight: "1px solid #697565",
-        transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-        backdropFilter: "blur(10px)",
-        boxShadow: "0 10px 25px rgba(24, 28, 20, 0.3)",
-      }}
+      className={`sidebar ${collapsed ? 'collapsed' : 'expanded'} ${mobileOpen ? 'mobile-open' : ''}`}
     >
-      {/* Header */}
       <div
         style={{
           padding: "20px 16px",

@@ -220,69 +220,86 @@ function App() {
         }
       `}</style>
 
-      <div
-        style={{
-          display: "flex",
-          height: "100vh",
-          fontFamily:
-            "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif",
-          background:
-            "linear-gradient(135deg, #ECDFCC 0%, #697565 50%, #3C3D37 100%)",
-          overflow: "hidden",
-        }}
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  return (
+    <div className="app-container">
+      {/* Mobile Menu Button */}
+      <button 
+        className="mobile-menu-btn"
+        onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+        aria-label="Toggle Menu"
       >
-        <Sidebar
-          collapsed={sidebarCollapsed}
-          onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
-          sessions={chatSessions}
+        {mobileMenuOpen ? "✕" : "☰"}
+      </button>
+
+      {/* Overlay for mobile sidebar */}
+      {mobileMenuOpen && (
+        <div 
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.4)',
+            zIndex: 90,
+            backdropFilter: 'blur(2px)'
+          }}
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+
+      <Sidebar
+        collapsed={sidebarCollapsed}
+        mobileOpen={mobileMenuOpen}
+        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+        sessions={chatSessions}
+        selectedSession={selectedSession}
+        onSelectSession={(session) => {
+          selectSession(session);
+          setMobileMenuOpen(false); // Close menu on mobile after selection
+        }}
+        onDeleteSession={deleteSession}
+        onDeleteAll={deleteAllChatHistory}
+        onNewChat={() => {
+          startNewChat();
+          setMobileMenuOpen(false); // Close menu on mobile
+        }}
+      />
+
+      <div className="main-content">
+        <ChatWindow
+          messages={messages}
           selectedSession={selectedSession}
-          onSelectSession={selectSession}
-          onDeleteSession={deleteSession}
-          onDeleteAll={deleteAllChatHistory}
-          onNewChat={startNewChat}
+          isLoading={isLoading}
+          onSubmitFeedback={submitFeedback}
+          feedbackLoading={feedbackLoading}
+          onSuggestionClick={(text) => setCurrentInput(text)}
+          onImageUpload={() => fileInputRef.current?.click()}
+          messagesEndRef={messagesEndRef}
+          fileInputRef={fileInputRef}
         />
 
-        <div
-          style={{
-            flex: 1,
-            display: "flex",
-            flexDirection: "column",
-          }}
-        >
-          <ChatWindow
-            messages={messages}
-            selectedSession={selectedSession}
-            isLoading={isLoading}
-            onSubmitFeedback={submitFeedback}
-            feedbackLoading={feedbackLoading}
-            onSuggestionClick={(text) => setCurrentInput(text)}
-            onImageUpload={() => fileInputRef.current?.click()}
-            messagesEndRef={messagesEndRef}
-            fileInputRef={fileInputRef}
-          />
+        <ChatInput
+          value={currentInput}
+          onChange={setCurrentInput}
+          onSubmit={handleSubmit}
+          onImageUpload={() => fileInputRef.current?.click()}
+          onVoiceToggle={handleVoiceInput}
+          onClear={clearTranscription}
+          isLoading={isLoading}
+          isConverting={isConverting}
+          isListening={isListening}
+          speechSupported={speechSupported}
+          speechInterimResult={speechInterimResult}
+          speechError={speechError}
+          fileInputRef={fileInputRef}
+        />
 
-          <ChatInput
-            value={currentInput}
-            onChange={setCurrentInput}
-            onSubmit={handleSubmit}
-            onImageUpload={() => fileInputRef.current?.click()}
-            onVoiceToggle={handleVoiceInput}
-            onClear={clearTranscription}
-            isLoading={isLoading}
-            isConverting={isConverting}
-            isListening={isListening}
-            speechSupported={speechSupported}
-            speechInterimResult={speechInterimResult}
-            speechError={speechError}
-            fileInputRef={fileInputRef}
-          />
-
-          <ImageUploader
-            onUpload={handleImageUpload}
-            fileInputRef={fileInputRef}
-          />
-        </div>
+        <ImageUploader
+          onUpload={handleImageUpload}
+          fileInputRef={fileInputRef}
+        />
       </div>
+    </div>
     </>
   );
 }

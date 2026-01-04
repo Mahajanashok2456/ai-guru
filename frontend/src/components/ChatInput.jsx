@@ -17,15 +17,7 @@ function ChatInput({
   fileInputRef,
 }) {
   return (
-    <div
-      style={{
-        padding: "24px",
-        background:
-          "linear-gradient(180deg, rgba(255,255,255,0.8) 0%, rgba(255,255,255,1) 100%)",
-        backdropFilter: "blur(10px)",
-        borderTop: "1px solid rgba(0,0,0,0.05)",
-      }}
-    >
+    <div className="input-area">
       {/* Speech Recognition Error Display */}
       {speechError && (
         <div
@@ -98,32 +90,19 @@ function ChatInput({
       )}
 
       <form onSubmit={onSubmit}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            padding: "12px 16px",
-            border: "2px solid #697565",
-            borderRadius: "24px",
-            backgroundColor: "#ECDFCC",
-            transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-            boxShadow:
-              "0 4px 20px rgba(105, 117, 101, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.5)",
-            animation: value ? "inputFocus 0.3s ease-out" : "none",
-            transform: "translateY(0)",
-          }}
+        <div 
+          className="input-container"
           onMouseEnter={(e) => {
-            e.target.style.borderColor = "#3C3D37";
-            e.target.style.boxShadow =
+            e.currentTarget.style.borderColor = "#3C3D37";
+            e.currentTarget.style.boxShadow =
               "0 8px 25px rgba(105, 117, 101, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.7)";
-            e.target.style.transform = "translateY(-2px)";
+            e.currentTarget.style.transform = "translateY(-2px)";
           }}
           onMouseLeave={(e) => {
-            e.target.style.borderColor = "#697565";
-            e.target.style.boxShadow =
+            e.currentTarget.style.borderColor = "#697565";
+            e.currentTarget.style.boxShadow =
               "0 4px 20px rgba(105, 117, 101, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.5)";
-            e.target.style.transform = "translateY(0)";
+            e.currentTarget.style.transform = "translateY(0)";
           }}
         >
           {/* Attachment Button */}
@@ -170,6 +149,7 @@ function ChatInput({
           </button>
           {/* Text Input */}
           <input
+            className="text-input"
             type="text"
             value={speechInterimResult || value}
             onChange={(e) =>
@@ -187,11 +167,6 @@ function ChatInput({
                 : "Type your message..."
             }
             style={{
-              flex: 1,
-              border: "none",
-              outline: "none",
-              backgroundColor: "transparent",
-              fontSize: "16px",
               color: isListening
                 ? "#ff4444"
                 : isConverting
@@ -200,23 +175,9 @@ function ChatInput({
                 ? "#8B4513"
                 : "#181C14",
               fontWeight: isListening ? "600" : "500",
-              transition: "all 0.2s ease",
-              padding: "4px 0",
               fontStyle:
                 isConverting || isListening ? "italic" : "normal",
               opacity: speechInterimResult ? 0.8 : 1,
-            }}
-            onFocus={(e) => {
-              if (!isConverting) {
-                e.target.style.fontSize = "16px";
-                e.target.style.transform = "translateY(-1px)";
-              }
-            }}
-            onBlur={(e) => {
-              if (!isConverting) {
-                e.target.style.fontSize = "16px";
-                e.target.style.transform = "translateY(0)";
-              }
             }}
             disabled={isLoading || isConverting || isListening}
           />
