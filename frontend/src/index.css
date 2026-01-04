@@ -101,6 +101,60 @@ h3 {
   letter-spacing: -0.5px;
 }
 
+/* Header & Footer Credits */
+.header-top {
+  padding: 12px 24px;
+  display: flex;
+  justify-content: flex-end;
+  background: transparent;
+  z-index: 40;
+}
+
+.creator-badge {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-dim);
+  background: var(--glass-bg);
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(10px);
+}
+
+.creator-badge a {
+  color: var(--brand-primary);
+  text-decoration: none;
+  font-weight: 600;
+  transition: var(--transition);
+}
+
+.creator-badge a:hover {
+  color: var(--brand-secondary);
+}
+
+.footer-bottom {
+  padding: 10px 0;
+  text-align: center;
+  background: transparent;
+  border-top: 1px solid var(--glass-border);
+}
+
+.footer-bottom p {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+}
+
+.footer-bottom a {
+  color: var(--text-muted);
+  text-decoration: none;
+  font-weight: 500;
+  transition: var(--transition);
+}
+
+.footer-bottom a:hover {
+  color: var(--brand-primary);
+}
+
 /* Chat Window - Minimalist */
 .chat-window {
   flex: 1;
@@ -324,7 +378,18 @@ h3 {
   }
 
   .main-content {
-    padding-top: 60px;
+    padding-top: 50px;
+  }
+
+  .header-top {
+    padding: 10px 16px;
+    position: absolute;
+    top: 0;
+    right: 0;
+  }
+
+  .footer-bottom {
+    padding: 12px;
   }
 }
 

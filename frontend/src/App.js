@@ -264,6 +264,12 @@ function App() {
       />
 
       <div className="main-content">
+        <header className="header-top">
+          <div className="creator-badge">
+            Created by <a href="https://mahajanashok.vercel.app/" target="_blank" rel="noopener noreferrer">Mahajan Ashok</a>
+          </div>
+        </header>
+
         <ChatWindow
           messages={messages}
           selectedSession={selectedSession}
@@ -296,6 +302,10 @@ function App() {
           onUpload={handleImageUpload}
           fileInputRef={fileInputRef}
         />
+
+        <footer className="footer-bottom">
+          <p>© 2026 AI Guru Multibot | Built by <a href="https://mahajanashok.vercel.app/" target="_blank" rel="noopener noreferrer">Mahajan Ashok</a></p>
+        </footer>
       </div>
     </div>
     </>
