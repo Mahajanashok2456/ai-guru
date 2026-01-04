@@ -76,7 +76,9 @@ function ChatInput({
             className="action-btn send-btn"
             disabled={!value.trim() || isLoading || isConverting}
           >
-            {isLoading ? "..." : "➤"}
+            {isLoading ? (
+              <div className="animate-spin" style={{ width: "14px", height: "14px", border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "#fff", borderRadius: "50%" }}></div>
+            ) : "➤"}
           </button>
         </div>
       </form>
