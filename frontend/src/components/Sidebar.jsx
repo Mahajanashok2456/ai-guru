@@ -15,36 +15,36 @@ function Sidebar({
     <div
       className={`sidebar ${collapsed ? 'collapsed' : 'expanded'} ${mobileOpen ? 'mobile-open' : ''}`}
     >
-      <div
-        style={{
-          padding: "20px 16px",
-          borderBottom: "1px solid #697565",
-          background: "rgba(236, 223, 204, 0.05)",
-          backdropFilter: "blur(10px)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
+      <div className="sidebar-header">
         {!collapsed && (
-          <h2
-            style={{
-              margin: "0",
-              fontSize: "20px",
-              fontWeight: "700",
-              background: "linear-gradient(135deg, #60a5fa, #a78bfa)",
-              backgroundClip: "text",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-              animation: "fadeInUp 0.5s ease-out",
-            }}
-          >
+          <h2 className="sidebar-title">
             AI Guru Multibot
           </h2>
         )}
+        
+        {/* Mobile Close Button */}
+        {mobileOpen && (
+          <button
+            onClick={() => onSelectSession(null)} // This is just a way to trigger parent state if needed, but App.js handles overlay
+            className="mobile-close-btn"
+            style={{
+              background: "rgba(255, 255, 255, 0.1)",
+              border: "none",
+              borderRadius: "8px",
+              padding: "8px 12px",
+              color: "white",
+              cursor: "pointer",
+              fontSize: "18px",
+              display: "none" // Managed by CSS media query if we had a class, but I'll add a class
+            }}
+          >
+            ✕
+          </button>
+        )}
+
         <button
           onClick={onToggleCollapse}
-          className="button-hover"
+          className="button-hover sidebar-toggle-btn"
           style={{
             background: "rgba(255, 255, 255, 0.1)",
             border: "none",

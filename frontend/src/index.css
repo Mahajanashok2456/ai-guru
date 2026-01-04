@@ -160,13 +160,15 @@ body {
 /* Mobile Responsiveness */
 @media (max-width: 768px) {
   .sidebar {
-    position: absolute;
+    position: fixed;
     left: 0;
     top: 0;
     bottom: 0;
     transform: translateX(-100%);
-    width: 280px !important;
-    border-radius: 0 20px 20px 0;
+    width: 85% !important;
+    max-width: 300px;
+    border-radius: 0 16px 16px 0;
+    z-index: 1000;
   }
 
   .sidebar.mobile-open {
@@ -174,21 +176,62 @@ body {
     box-shadow: 0 0 100px rgba(0, 0, 0, 0.5);
   }
 
+  .sidebar-header {
+    padding: 12px;
+  }
+
+  .sidebar-title {
+    font-size: 18px;
+  }
+
+  .sidebar-toggle-btn {
+    display: none !important;
+    /* Hide collapse/expand on mobile */
+  }
+
   .chat-window {
     border-radius: 0;
   }
 
+  .messages-container {
+    padding: 12px 10px;
+  }
+
   .input-area {
-    padding: 12px;
+    padding: 10px;
+    background: var(--color-ivory);
   }
 
   .input-container {
-    padding: 4px 12px;
+    padding: 6px 10px;
     border-radius: 30px;
+    gap: 4px;
+    border-width: 1.5px;
+  }
+
+  .text-input {
+    font-size: 14px;
+    padding: 8px 0;
   }
 
   .welcome-title {
-    font-size: 24px !important;
+    font-size: 20px !important;
+    margin-bottom: 8px !important;
+    padding: 0 10px;
+  }
+
+  .welcome-text {
+    font-size: 14px !important;
+    margin-bottom: 24px !important;
+    padding: 0 20px;
+  }
+
+  /* Shrink buttons on mobile to prevent overflow */
+  .input-container button {
+    padding: 4px !important;
+    min-width: 32px !important;
+    height: 32px !important;
+    font-size: 14px !important;
   }
 }
 
@@ -211,6 +254,15 @@ body {
 @media (max-width: 768px) {
   .mobile-menu-btn {
     display: block;
+  }
+
+  .mobile-close-btn {
+    display: block !important;
+  }
+
+  .sidebar-header {
+    justify-content: flex-start !important;
+    gap: 15px;
   }
 }
 

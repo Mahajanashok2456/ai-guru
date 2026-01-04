@@ -146,6 +146,7 @@ function ChatWindow({
               Welcome to AI Guru Multibot!
             </h1>
             <p
+              className="welcome-text"
               style={{
                 fontSize: "16px",
                 color: "#697565",
