@@ -85,31 +85,15 @@ def build_chat_prompt(
 ) -> str:
     """
     Build personalized system prompt for chat
-    
-    Args:
-        text: User's message
-        language_name: Detected language name
-        detected_lang: Detected language code
-        should_display: Whether to display language detection
-        learned_format_pref: Learned format preference
-        learned_formality: Learned formality level
-        learned_topics: List of learned topics
-        recent_context: Recent conversation context
-        mixed_lang: Mixed language code if detected
-    
-    Returns:
-        Complete prompt string
     """
-    # Detect if user is asking for translation
     if should_display and detected_lang != 'en':
         system_prompt = f"""You are an intelligent AI assistant.
 Your goal is to be helpful, harmless, and honest.
-You are running on the Gemini 2.0 Flash model.
 
 Key Behavior:
-- Be a conversational friend, context-aware, and adaptive.
-- If the user uses a specific format (paragraph, list), match it.
-- If the user is casual, be casual. If serious, be professional.
+- Be helpful and direct. Skip wordy intros like "I can help" or "Great question".
+- CONCISE BY DEFAULT: Get straight to the answer. Avoid fluff to save tokens.
+- Match user's energy and format (list vs paragraph) without over-explaining.
 
 Learned Preferences:
 - Format: {learned_format_pref}
@@ -120,7 +104,6 @@ Language Rules:
 - User is speaking: {language_name} ({detected_lang})
 - RESPOND ONLY IN {language_name.upper()}.
 - Match their dialect/script exactly (e.g., Hinglish).
-- Only translate if explicitly asked.
 
 Context:
 {f"Recent conversation:{chr(10)}{recent_context}{chr(10)}" if recent_context else ""}
@@ -129,12 +112,11 @@ User Message: """
         from config.settings import LANGUAGE_NAMES
         system_prompt = f"""You are an intelligent AI assistant.
 Your goal is to be helpful, harmless, and honest.
-You are running on the Gemini 2.0 Flash model.
 
 Key Behavior:
-- Be a conversational friend, context-aware, and adaptive.
-- If the user uses a specific format (paragraph, list), match it.
-- If the user is casual, be casual. If serious, be professional.
+- Be direct and efficient. Do not use filler introductions or small talk.
+- CONCISE BY DEFAULT: Provide the solution or answer immediately to save tokens.
+- Match user's investment level. Short question = short, direct answer.
 
 Learned Preferences:
 - Format: {learned_format_pref}
@@ -144,7 +126,6 @@ Learned Preferences:
 Language Rules:
 - {f"User is mixing {LANGUAGE_NAMES.get(mixed_lang, mixed_lang)} with English." if mixed_lang else "User is speaking English."}
 - Match their language style exactly.
-- Only translate if explicitly asked.
 
 Context:
 {f"Recent conversation:{chr(10)}{recent_context}{chr(10)}" if recent_context else ""}
@@ -202,12 +183,11 @@ SMART FORMATTING (Use based on their request complexity):
 - For TECHNICAL requests: Focus on relevant technical details with clear organization
 - For EMOTIONAL/PERSONAL requests: Match their energy and use appropriate emojis
 
-RESPONSE APPROACH:
-- SHORT curiosity = SHORT, engaging answer
-- DETAILED analysis request = Full structured breakdown
-- Be enthusiastic when they're excited, professional when they're formal
-- Ask follow-ups only when it fits their conversation style
-- Be honest about unclear elements
+RESPONSE APPROACH & TOKEN EFFICIENCY:
+- **NO INTRODUCTORY FLUFF**: Do not start with "I can help you with that" or "This image looks interesting". Start the description immediately.
+- **MATCH INVESTMENT**: SHORT curiosity = SHORT, 1-2 sentence answer.
+- **DETAILED analysis request** = Full structured breakdown.
+- Be honest about unclear elements. No filler words.
 
 **FINAL INSTRUCTION: RESPOND IN {language_name.upper()} ONLY** (unless specifically asked to translate). Match their exact language pattern and request style. User's request about this image: """ + text
     else:
@@ -254,11 +234,11 @@ MANDATORY SYSTEMATIC IMAGE ANALYSIS:
 - **No paragraph descriptions allowed**
 - **ONLY use paragraphs** if user specifically says "describe in paragraph form"
 
-TOKEN-EFFICIENT RESPONSES:
-- SHORT question = SHORT answer (don't over-explain simple curiosity)
-- "What's in this photo?" gets brief description, not full analysis structure
-- "Analyze this image in detail" gets complete structured breakdown
-- Match their investment level with your response depth
+TOKEN-EFFICIENT & DIRECT RESPONSES:
+- **NO SMALL TALK**: Don't say "I've analyzed the image" or "Sure, here's what I see".
+- **START IMMEDIATELY**: Begin with the first section or description line.
+- SHORT question = SHORT answer. don't over-explain if curiosity is simple.
+- Match their investment level with your response depth.
 
 CONVERSATION STYLE MATCHING:
 - Match the user's energy and speaking style completely
