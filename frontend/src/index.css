@@ -194,11 +194,14 @@ h3 {
 }
 
 .message-content {
-  max-width: 80%;
+  max-width: 85%;
   padding: 14px 20px;
   border-radius: var(--radius-lg);
   font-size: 0.95rem;
   box-shadow: var(--shadow-soft);
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  position: relative;
 }
 
 .message-content.user {
@@ -212,6 +215,46 @@ h3 {
   color: var(--text-main);
   border-bottom-left-radius: 4px;
   border: 1px solid var(--glass-border);
+}
+
+/* Markdown Styling */
+.markdown-content pre {
+  background: rgba(0, 0, 0, 0.25);
+  padding: 16px;
+  border-radius: var(--radius-md);
+  overflow-x: auto;
+  margin: 12px 0;
+  border: 1px solid var(--glass-border);
+}
+
+.markdown-content code {
+  font-family: 'Fira Code', 'Courier New', monospace;
+  font-size: 0.85rem;
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  color: var(--brand-secondary);
+}
+
+.markdown-content pre code {
+  padding: 0;
+  background: transparent;
+  display: block;
+  color: #e2e8f0;
+}
+
+.markdown-content p {
+  margin-bottom: 12px;
+}
+
+.markdown-content p:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+  margin-left: 20px;
+  margin-bottom: 12px;
 }
 
 /* Input Area - Floating Capsule */
