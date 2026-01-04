@@ -3,7 +3,7 @@ import { marked } from "marked";
 
 function App() {
   // Configuration for API URL - supports both local development and production deployment
-  const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:8001";
+  const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:8000";
 
   const [chatSessions, setChatSessions] = useState([]); // Changed from chatHistory to chatSessions
   const [selectedSession, setSelectedSession] = useState(null); // Changed from selectedHistory to selectedSession
@@ -620,7 +620,6 @@ function App() {
           setCurrentInput("[Error transcribing audio. Please try again.]");
         } finally {
           setIsConverting(false);
-          setRecordedAudio(null); // Clear audio since we now have text
         }
 
         // Stop all tracks to release microphone

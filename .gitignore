@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Python
 venv/
 __pycache__/
@@ -70,3 +71,49 @@ temp/
 *.docx
 *.xlsx
 *.pptx
+=======
+# Environment variables
+.env
+
+# Dependencies
+node_modules/
+frontend/node_modules/
+
+# Virtual environment
+venv/
+env/
+ENV/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+>>>>>>> 624f6383218833c3c7fcca1579652e65c82396b7
